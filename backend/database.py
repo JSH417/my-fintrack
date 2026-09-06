@@ -139,6 +139,7 @@ def init_db():
             name TEXT NOT NULL,
             type TEXT NOT NULL,
             balance DOUBLE PRECISION DEFAULT 0,
+            initial_balance DOUBLE PRECISION DEFAULT 0,
             currency TEXT DEFAULT 'KRW',
             is_investment INTEGER DEFAULT 0,
             color TEXT DEFAULT '#4F46E5',
@@ -202,6 +203,11 @@ def init_db():
             value TEXT NOT NULL
         );
         """)
+
+        try:
+            cursor.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS initial_balance DOUBLE PRECISION DEFAULT 0")
+        except Exception:
+            pass
 
         cursor.execute("SELECT COUNT(*) as cnt FROM profiles")
         cnt = cursor.fetchone()['cnt']
@@ -267,6 +273,7 @@ def init_db():
             name TEXT NOT NULL,
             type TEXT NOT NULL,
             balance REAL DEFAULT 0,
+            initial_balance REAL DEFAULT 0,
             currency TEXT DEFAULT 'KRW',
             is_investment INTEGER DEFAULT 0,
             color TEXT DEFAULT '#4F46E5',
@@ -339,6 +346,11 @@ def init_db():
         );
         """)
 
+        try:
+            cursor.execute("ALTER TABLE accounts ADD COLUMN initial_balance REAL DEFAULT 0")
+        except Exception:
+            pass
+
         cursor.execute("SELECT COUNT(*) FROM profiles")
         if cursor.fetchone()[0] == 0:
             cursor.execute("INSERT INTO profiles (id, name, icon, default_mode, font_size, theme_color) VALUES ('mom', '어머니 가계부', '🌸', 'simple', 'large', '#10B981')")
@@ -385,25 +397,32 @@ def recalculate_account_balances(profile_id: Optional[str] = None):
     cursor = conn.cursor()
 
     if profile_id:
-        cursor.execute("SELECT id FROM accounts WHERE profile_id = ?", (profile_id,))
+        cursor.execute("SELECT id, COALESCE(initial_balance, 0) as init_bal FROM accounts WHERE profile_id = ?", (profile_id,))
     else:
-        cursor.execute("SELECT id FROM accounts")
-    accounts = [row["id"] for row in cursor.fetchall()]
+        cursor.execute("SELECT id, COALESCE(initial_balance, 0) as init_bal FROM accounts")
+    accounts = cursor.fetchall()
 
-    for acc_id in accounts:
+    for row in accounts:
+        acc_id = row['id'] if isinstance(row, dict) else row[0]
+        init_bal = (row['init_bal'] if isinstance(row, dict) else row[1]) or 0.0
+
         cursor.execute("SELECT COALESCE(SUM(amount), 0) as s FROM transactions WHERE account_id = ? AND type = 'income'", (acc_id,))
-        income_sum = cursor.fetchone()['s'] if is_postgres() else cursor.fetchone()[0]
+        res_inc = cursor.fetchone()
+        income_sum = (res_inc['s'] if isinstance(res_inc, dict) else res_inc[0]) or 0.0
 
         cursor.execute("SELECT COALESCE(SUM(amount), 0) as s FROM transactions WHERE account_id = ? AND type = 'expense'", (acc_id,))
-        expense_sum = cursor.fetchone()['s'] if is_postgres() else cursor.fetchone()[0]
+        res_exp = cursor.fetchone()
+        expense_sum = (res_exp['s'] if isinstance(res_exp, dict) else res_exp[0]) or 0.0
 
         cursor.execute("SELECT COALESCE(SUM(amount), 0) as s FROM transactions WHERE account_id = ? AND type = 'transfer'", (acc_id,))
-        transfer_out_sum = cursor.fetchone()['s'] if is_postgres() else cursor.fetchone()[0]
+        res_tout = cursor.fetchone()
+        transfer_out_sum = (res_tout['s'] if isinstance(res_tout, dict) else res_tout[0]) or 0.0
 
         cursor.execute("SELECT COALESCE(SUM(amount), 0) as s FROM transactions WHERE to_account_id = ? AND type = 'transfer'", (acc_id,))
-        transfer_in_sum = cursor.fetchone()['s'] if is_postgres() else cursor.fetchone()[0]
+        res_tin = cursor.fetchone()
+        transfer_in_sum = (res_tin['s'] if isinstance(res_tin, dict) else res_tin[0]) or 0.0
 
-        new_balance = income_sum - expense_sum - transfer_out_sum + transfer_in_sum
+        new_balance = init_bal + income_sum - expense_sum - transfer_out_sum + transfer_in_sum
         cursor.execute("UPDATE accounts SET balance = ? WHERE id = ?", (new_balance, acc_id))
 
     conn.commit()

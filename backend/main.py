@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +10,7 @@ import sqlite3
 
 from .database import get_db, init_db, recalculate_account_balances, reset_database, load_sample_data
 from .price_service import get_usd_krw_rate, fetch_live_price, update_all_investments
+from .receipt_service import analyze_receipt_with_gemini
 
 app = FastAPI(title="FinTrack - 스마트 가계부 & 투자 포트폴리오 (가족 멀티프로필)", version="2.0.0")
 
@@ -39,6 +40,15 @@ class TransactionCreate(BaseModel):
     to_account_id: Optional[int] = None
     memo: Optional[str] = ""
 
+class TransactionUpdate(BaseModel):
+    date: Optional[str] = None
+    type: Optional[str] = None
+    amount: Optional[float] = None
+    category: Optional[str] = None
+    account_id: Optional[int] = None
+    to_account_id: Optional[int] = None
+    memo: Optional[str] = None
+
 class BudgetSet(BaseModel):
     profile_id: Optional[str] = "mom"
     month: str  # YYYY-MM
@@ -49,9 +59,16 @@ class AccountCreate(BaseModel):
     profile_id: Optional[str] = "mom"
     name: str
     type: str
-    balance: float = 0.0
+    initial_balance: Optional[float] = 0.0
+    balance: Optional[float] = 0.0
     color: Optional[str] = "#3B82F6"
     is_investment: Optional[int] = 0
+
+class AccountUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    initial_balance: Optional[float] = None
+    color: Optional[str] = None
 
 class InvestmentCreate(BaseModel):
     profile_id: Optional[str] = "me"
@@ -302,6 +319,63 @@ def create_transaction(tx: TransactionCreate):
     recalculate_account_balances(p_id)
     return {"success": True, "id": new_id}
 
+@app.get("/api/transactions/{tx_id}")
+def get_transaction(tx_id: int):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM transactions WHERE id = ?", (tx_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="거래 내역을 찾을 수 없습니다.")
+    return dict(row)
+
+@app.put("/api/transactions/{tx_id}")
+def update_transaction(tx_id: int, tx: TransactionUpdate):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT profile_id FROM transactions WHERE id = ?", (tx_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="거래 내역을 찾을 수 없습니다.")
+
+    p_id = row['profile_id'] if isinstance(row, dict) else row[0]
+
+    updates = []
+    params = []
+    if tx.date is not None:
+        updates.append("date = ?")
+        params.append(tx.date)
+    if tx.type is not None:
+        updates.append("type = ?")
+        params.append(tx.type)
+    if tx.amount is not None:
+        updates.append("amount = ?")
+        params.append(tx.amount)
+    if tx.category is not None:
+        updates.append("category = ?")
+        params.append(tx.category)
+    if tx.account_id is not None:
+        updates.append("account_id = ?")
+        params.append(tx.account_id)
+    if tx.to_account_id is not None:
+        updates.append("to_account_id = ?")
+        params.append(tx.to_account_id)
+    if tx.memo is not None:
+        updates.append("memo = ?")
+        params.append(tx.memo)
+
+    if updates:
+        params.append(tx_id)
+        cursor.execute(f"UPDATE transactions SET {', '.join(updates)} WHERE id = ?", params)
+        conn.commit()
+
+    conn.close()
+    if p_id:
+        recalculate_account_balances(p_id)
+    return {"success": True}
+
 @app.delete("/api/transactions/{tx_id}")
 def delete_transaction(tx_id: int):
     conn = get_db()
@@ -431,14 +505,54 @@ def create_account(acc: AccountCreate):
     conn = get_db()
     cursor = conn.cursor()
     p_id = acc.profile_id or "mom"
+    init_bal = acc.initial_balance if acc.initial_balance is not None else (acc.balance or 0.0)
     cursor.execute("""
-        INSERT INTO accounts (profile_id, name, type, balance, color, is_investment)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (p_id, acc.name, acc.type, acc.balance, acc.color, acc.is_investment))
+        INSERT INTO accounts (profile_id, name, type, balance, initial_balance, color, is_investment)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (p_id, acc.name, acc.type, init_bal, init_bal, acc.color, acc.is_investment))
     new_id = cursor.lastrowid
     conn.commit()
     conn.close()
+
+    recalculate_account_balances(p_id)
     return {"success": True, "id": new_id}
+
+@app.put("/api/accounts/{acc_id}")
+def update_account(acc_id: int, acc: AccountUpdate):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT profile_id FROM accounts WHERE id = ?", (acc_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="통장을 찾을 수 없습니다.")
+
+    p_id = row['profile_id'] if isinstance(row, dict) else row[0]
+
+    updates = []
+    params = []
+    if acc.name is not None:
+        updates.append("name = ?")
+        params.append(acc.name)
+    if acc.type is not None:
+        updates.append("type = ?")
+        params.append(acc.type)
+    if acc.initial_balance is not None:
+        updates.append("initial_balance = ?")
+        params.append(acc.initial_balance)
+    if acc.color is not None:
+        updates.append("color = ?")
+        params.append(acc.color)
+
+    if updates:
+        params.append(acc_id)
+        cursor.execute(f"UPDATE accounts SET {', '.join(updates)} WHERE id = ?", params)
+        conn.commit()
+
+    conn.close()
+    if p_id:
+        recalculate_account_balances(p_id)
+    return {"success": True}
 
 @app.delete("/api/accounts/{acc_id}")
 def delete_account(acc_id: int):
@@ -660,6 +774,36 @@ def record_trade(trade: InvestmentTrade):
     if trade.sync_to_ledger and trade.account_id:
         recalculate_account_balances(p_id)
 
+    return {"success": True}
+
+# ----------------- Receipt AI Scanner & Settings -----------------
+
+@app.post("/api/receipt/scan")
+async def scan_receipt(file: UploadFile = File(...)):
+    """영수증 사진을 받아 Gemini 비전 AI로 분석 후 JSON 반환"""
+    contents = await file.read()
+    mime = file.content_type or "image/jpeg"
+    result = analyze_receipt_with_gemini(contents, mime_type=mime)
+    return result
+
+@app.get("/api/settings")
+def get_settings():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT key, value FROM settings")
+    rows = cursor.fetchall()
+    conn.close()
+    return {r['key']: r['value'] for r in rows}
+
+@app.post("/api/settings")
+def update_settings(payload: Dict[str, str]):
+    conn = get_db()
+    cursor = conn.cursor()
+    for k, v in payload.items():
+        cursor.execute("DELETE FROM settings WHERE key = ?", (k,))
+        cursor.execute("INSERT INTO settings (key, value) VALUES (?, ?)", (k, v))
+    conn.commit()
+    conn.close()
     return {"success": True}
 
 # ----------------- Data Reset & Sample -----------------

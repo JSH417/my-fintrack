@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   await switchProfile(currentProfile, false, isLocked);
   await loadCategories();
+  loadSettings();
 });
 
 function setupEventListeners() {
@@ -205,6 +206,7 @@ function switchTab(tabId) {
   else if (tabId === 'tab-budget') loadBudgets();
   else if (tabId === 'tab-investments') loadInvestments();
   else if (tabId === 'tab-accounts') loadAccounts();
+  else if (tabId === 'tab-settings') loadSettings();
 }
 
 function changeMonth(delta) {
@@ -308,7 +310,7 @@ async function loadRecentTransactions() {
       const typeLabel = isExpense ? '지출' : (isIncome ? '수입' : '이체');
 
       return `
-        <div class="flex items-center justify-between p-3.5 rounded-xl border border-slate-100 hover:bg-slate-50 transition">
+        <div class="flex items-center justify-between p-3.5 rounded-xl border border-slate-100 hover:bg-slate-50 transition cursor-pointer group" onclick="openEditTransactionById(${tx.id})" title="클릭하여 내역 수정">
           <div class="flex items-center gap-3">
             <span class="text-xs font-bold px-2 py-1 rounded-lg ${badgeClass}">
               ${typeLabel}
@@ -318,8 +320,13 @@ async function loadRecentTransactions() {
               <div class="text-xs text-slate-400">${tx.date} · ${tx.account_name || '기본통장'}</div>
             </div>
           </div>
-          <div class="font-black text-base ${colorClass}">
-            ${sign}${formatCurrency(tx.amount)}
+          <div class="flex items-center gap-2">
+            <div class="font-black text-base ${colorClass}">
+              ${sign}${formatCurrency(tx.amount)}
+            </div>
+            <span class="text-slate-300 group-hover:text-indigo-600 text-xs p-1 transition">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </span>
           </div>
         </div>
       `;
@@ -381,8 +388,11 @@ async function loadTransactions() {
           <td class="py-3 px-3 text-right font-black ${colorClass}">
             ${sign}${formatCurrency(tx.amount)}
           </td>
-          <td class="py-3 px-3 text-center">
-            <button onclick="deleteTransaction(${tx.id})" class="text-slate-400 hover:text-rose-600 text-xs transition" title="삭제">
+          <td class="py-3 px-3 text-center space-x-1 whitespace-nowrap">
+            <button onclick="openEditTransactionById(${tx.id})" class="text-slate-400 hover:text-indigo-600 text-xs p-1.5 transition" title="내역 수정">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            <button onclick="deleteTransaction(${tx.id})" class="text-slate-400 hover:text-rose-600 text-xs p-1.5 transition" title="삭제">
               <i class="fa-regular fa-trash-can"></i>
             </button>
           </td>
@@ -487,13 +497,18 @@ async function selectCalendarDay(dateStr) {
       const color = isExp ? 'text-rose-600' : (tx.type === 'income' ? 'text-emerald-600' : 'text-blue-600');
       const sign = isExp ? '-' : (tx.type === 'income' ? '+' : '');
       return `
-        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 hover:bg-indigo-50/60 transition cursor-pointer group" onclick="openEditTransactionById(${tx.id})" title="클릭하여 내역 수정">
           <div>
-            <span class="font-bold text-slate-800">${tx.category}</span>
+            <span class="font-bold text-slate-800 text-xs">${tx.category}</span>
             <span class="text-xs text-slate-500 ml-1">(${tx.memo || '메모 없음'})</span>
           </div>
-          <div class="font-black ${color}">
-            ${sign}${formatCurrency(tx.amount)}
+          <div class="flex items-center gap-2">
+            <div class="font-black text-xs ${color}">
+              ${sign}${formatCurrency(tx.amount)}
+            </div>
+            <span class="text-slate-300 group-hover:text-indigo-600 text-xs transition">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </span>
           </div>
         </div>
       `;
@@ -760,20 +775,34 @@ async function loadAccounts() {
     if (grid) {
       grid.innerHTML = accountsList.map(acc => {
         const isInvest = acc.is_investment === 1;
+        const typeBadge = isInvest ? '투자/증권 예수금' : (acc.type === 'cash' ? '현금 지갑' : (acc.type === 'card' ? '카드' : '은행 통장'));
+        const initBal = acc.initial_balance !== undefined && acc.initial_balance !== null ? acc.initial_balance : 0;
         return `
-          <div class="p-5 rounded-2xl border border-slate-200 bg-white shadow-xs flex flex-col justify-between">
-            <div class="flex items-center justify-between mb-3">
-              <div class="flex items-center gap-2">
-                <span class="w-3 h-3 rounded-full" style="background-color: ${acc.color}"></span>
-                <span class="font-bold text-slate-900 text-sm">${acc.name}</span>
-              </div>
-              <span class="text-xs px-2 py-0.5 rounded font-bold ${isInvest ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}">
-                ${isInvest ? '투자/증권' : '일반'}
-              </span>
-            </div>
+          <div class="p-5 rounded-2xl border border-slate-200 bg-white shadow-xs flex flex-col justify-between hover:border-indigo-300 transition">
             <div>
-              <div class="text-2xl font-black text-slate-900">${formatCurrency(acc.balance)}</div>
-              <div class="text-xs text-slate-400 mt-1">${acc.currency || 'KRW'}</div>
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                  <span class="w-3.5 h-3.5 rounded-full shadow-2xs" style="background-color: ${acc.color}"></span>
+                  <span class="font-bold text-slate-900 text-base">${acc.name}</span>
+                </div>
+                <span class="text-xs px-2.5 py-0.5 rounded-full font-bold ${isInvest ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}">
+                  ${typeBadge}
+                </span>
+              </div>
+              <div class="space-y-1 my-3">
+                <div class="text-[11px] text-slate-400 font-medium">실시간 현재 잔액</div>
+                <div class="text-2xl font-black text-slate-900">${formatCurrency(acc.balance)}</div>
+                <div class="text-xs text-slate-500 pt-1.5 flex items-center gap-1.5 font-medium">
+                  <i class="fa-solid fa-flag-checkered text-slate-400 text-[11px]"></i>
+                  <span>시작 초기 잔액: <b class="text-slate-800">${formatCurrency(initBal)}</b></span>
+                </div>
+              </div>
+            </div>
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2 mt-2">
+              <button onclick="openEditAccountModal(${acc.id})" class="px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl text-xs font-bold text-slate-700 transition flex items-center gap-1.5 shadow-2xs">
+                <i class="fa-solid fa-pen-to-square text-[11px]"></i>
+                <span>잔액 및 정보 수정</span>
+              </button>
             </div>
           </div>
         `;
@@ -843,18 +872,79 @@ function selectCategoryChip(catName) {
 
 // ----------------- Modal Handlers -----------------
 
+let editingTxId = null;
+
 function openModal(type = 'expense') {
+  editingTxId = null;
   currentModalType = type;
   document.getElementById('txModal').classList.remove('hidden');
   document.getElementById('txDateInput').value = new Date().toISOString().slice(0, 10);
   document.getElementById('txAmountInput').value = '';
   document.getElementById('txMemoInput').value = '';
+  document.getElementById('txSubmitBtn').textContent = "저장하기";
+  const delBtn = document.getElementById('txModalDeleteBtn');
+  if (delBtn) delBtn.classList.add('hidden');
   setTxModalType(type);
   setTimeout(() => document.getElementById('txAmountInput').focus(), 100);
 }
 
 function closeModal(id) {
   document.getElementById(id).classList.add('hidden');
+  if (id === 'txModal') editingTxId = null;
+  if (id === 'accountModal') editingAccountId = null;
+}
+
+async function openEditTransactionById(txId) {
+  try {
+    const res = await fetch(`/api/transactions/${txId}`);
+    if (!res.ok) {
+      alert("해당 내역을 찾을 수 없습니다.");
+      return;
+    }
+    const tx = await res.json();
+    editingTxId = tx.id;
+    currentModalType = tx.type;
+
+    document.getElementById('txModal').classList.remove('hidden');
+    document.getElementById('txDateInput').value = tx.date;
+    document.getElementById('txAmountInput').value = tx.amount;
+    document.getElementById('txMemoInput').value = tx.memo || '';
+    document.getElementById('txModalTitle').textContent = "✏️ 가계부 내역 수정";
+    document.getElementById('txSubmitBtn').textContent = "수정 완료";
+    const delBtn = document.getElementById('txModalDeleteBtn');
+    if (delBtn) delBtn.classList.remove('hidden');
+
+    setTxModalType(tx.type);
+    if (tx.account_id) {
+      document.getElementById('txAccountInput').value = tx.account_id;
+    }
+    if (tx.to_account_id) {
+      document.getElementById('txToAccountInput').value = tx.to_account_id;
+    }
+    if (tx.category) {
+      selectCategoryChip(tx.category);
+    }
+    setTimeout(() => document.getElementById('txAmountInput').focus(), 100);
+  } catch (err) {
+    console.error("내역 조회 실패:", err);
+  }
+}
+
+async function deleteCurrentEditingTx() {
+  if (!editingTxId) return;
+  if (!confirm("이 거래 내역을 삭제하시겠습니까?")) return;
+  try {
+    const res = await fetch(`/api/transactions/${editingTxId}`, { method: 'DELETE' });
+    if (res.ok) {
+      closeModal('txModal');
+      showToast("내역이 삭제되었습니다.");
+      loadTransactions();
+      loadDashboard();
+      loadAccounts();
+    }
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 function setTxModalType(type) {
@@ -874,19 +964,19 @@ function setTxModalType(type) {
     bExp.className = "py-2 rounded-xl bg-white text-rose-600 shadow-xs font-black";
     toBox.classList.add('hidden');
     catField.classList.remove('hidden');
-    modalTitle.textContent = "- 쓴 돈 기록하기 (지출)";
+    modalTitle.textContent = editingTxId ? "✏️ 지출 내역 수정" : "- 쓴 돈 기록하기 (지출)";
     renderCategoryChips();
   } else if (type === 'income') {
     bInc.className = "py-2 rounded-xl bg-white text-emerald-600 shadow-xs font-black";
     toBox.classList.add('hidden');
     catField.classList.remove('hidden');
-    modalTitle.textContent = "+ 번 돈 기록하기 (수입)";
+    modalTitle.textContent = editingTxId ? "✏️ 수입 내역 수정" : "+ 번 돈 기록하기 (수입)";
     renderCategoryChips();
   } else if (type === 'transfer') {
     bTr.className = "py-2 rounded-xl bg-white text-indigo-600 shadow-xs font-black";
     toBox.classList.remove('hidden');
     catField.classList.add('hidden');
-    modalTitle.textContent = "계좌 간 이체 (송금)";
+    modalTitle.textContent = editingTxId ? "✏️ 이체 내역 수정" : "계좌 간 이체 (송금)";
   }
 }
 
@@ -909,25 +999,46 @@ async function handleTxSubmit(e) {
   }
 
   try {
-    const res = await fetch('/api/transactions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        profile_id: currentProfile,
-        date: date,
-        type: currentModalType,
-        amount: amount,
-        category: category,
-        account_id: accId,
-        to_account_id: toAccId,
-        memo: memo
-      })
-    });
+    let res;
+    if (editingTxId) {
+      res = await fetch(`/api/transactions/${editingTxId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: date,
+          type: currentModalType,
+          amount: amount,
+          category: category,
+          account_id: accId,
+          to_account_id: toAccId,
+          memo: memo
+        })
+      });
+    } else {
+      res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile_id: currentProfile,
+          date: date,
+          type: currentModalType,
+          amount: amount,
+          category: category,
+          account_id: accId,
+          to_account_id: toAccId,
+          memo: memo
+        })
+      });
+    }
+
     if (res.ok) {
       closeModal('txModal');
-      showToast("성공적으로 저장되었습니다.");
+      showToast(editingTxId ? "내역이 성공적으로 수정되었습니다! ✨" : "성공적으로 저장되었습니다.");
+      editingTxId = null;
       await loadAccounts();
       refreshCurrentView();
+    } else {
+      alert("내역 저장에 실패했습니다.");
     }
   } catch (err) {
     console.error(err);
@@ -1069,37 +1180,104 @@ async function handleTradeSubmit(e) {
   }
 }
 
-// Add Account Modal
+// Add / Edit Account Modal
+let editingAccountId = null;
+
 function openAddAccountModal() {
+  editingAccountId = null;
   document.getElementById('accountModal').classList.remove('hidden');
+  document.getElementById('accountModalTitle').textContent = "새 통장 / 지갑 추가";
+  document.getElementById('accSubmitBtn').textContent = "계좌 추가";
+  document.getElementById('accModalDeleteBtn').classList.add('hidden');
+  document.getElementById('accCurrentBalanceBox').classList.add('hidden');
   document.getElementById('accNameInput').value = '';
   document.getElementById('accBalanceInput').value = '0';
+  document.getElementById('accTypeInput').value = 'bank';
+  setTimeout(() => document.getElementById('accNameInput').focus(), 100);
+}
+
+function openEditAccountModal(accId) {
+  const acc = accountsList.find(a => a.id === accId);
+  if (!acc) return;
+
+  editingAccountId = accId;
+  document.getElementById('accountModal').classList.remove('hidden');
+  document.getElementById('accountModalTitle').textContent = `✏️ [${acc.name}] 잔액 및 정보 수정`;
+  document.getElementById('accSubmitBtn').textContent = "수정 저장하기";
+  document.getElementById('accModalDeleteBtn').classList.remove('hidden');
+
+  const curBox = document.getElementById('accCurrentBalanceBox');
+  curBox.classList.remove('hidden');
+  document.getElementById('accCurrentBalancePreview').textContent = formatCurrency(acc.balance);
+
+  document.getElementById('accNameInput').value = acc.name;
+  document.getElementById('accTypeInput').value = acc.type;
+  document.getElementById('accBalanceInput').value = acc.initial_balance !== undefined && acc.initial_balance !== null ? acc.initial_balance : acc.balance;
+  setTimeout(() => document.getElementById('accBalanceInput').focus(), 100);
+}
+
+async function deleteCurrentEditingAccount() {
+  if (!editingAccountId) return;
+  if (!confirm("정말로 이 통장/지갑을 삭제하시겠습니까?\n(해당 계좌와 연결된 가계부 거래 내역이 있을 수 있습니다)")) return;
+
+  try {
+    const res = await fetch(`/api/accounts/${editingAccountId}`, { method: 'DELETE' });
+    if (res.ok) {
+      closeModal('accountModal');
+      showToast("통장이 삭제되었습니다.");
+      editingAccountId = null;
+      await loadAccounts();
+      loadDashboard();
+    } else {
+      alert("삭제에 실패했습니다.");
+    }
+  } catch (e) {
+    console.error(e);
+  }
 }
 
 async function handleAccountSubmit(e) {
   e.preventDefault();
   const name = document.getElementById('accNameInput').value.trim();
   const type = document.getElementById('accTypeInput').value;
-  const bal = parseFloat(document.getElementById('accBalanceInput').value) || 0;
+  const initialBal = parseFloat(document.getElementById('accBalanceInput').value) || 0;
   const isInvest = (type === 'investment' || type === 'crypto') ? 1 : 0;
 
   try {
-    const res = await fetch('/api/accounts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        profile_id: currentProfile,
-        name: name,
-        type: type,
-        balance: bal,
-        is_investment: isInvest
-      })
-    });
+    let res;
+    if (editingAccountId) {
+      res = await fetch(`/api/accounts/${editingAccountId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name,
+          type: type,
+          initial_balance: initialBal
+        })
+      });
+    } else {
+      res = await fetch('/api/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile_id: currentProfile,
+          name: name,
+          type: type,
+          initial_balance: initialBal,
+          balance: initialBal,
+          is_investment: isInvest
+        })
+      });
+    }
+
     if (res.ok) {
       closeModal('accountModal');
-      showToast("통장이 추가되었습니다.");
-      loadAccounts();
+      showToast(editingAccountId ? "통장 잔액 및 정보가 수정되었습니다! ✨" : "새 통장이 추가되었습니다.");
+      editingAccountId = null;
+      await loadAccounts();
       loadDashboard();
+    } else {
+      alert("통장 저장에 실패했습니다.");
     }
   } catch (err) {
     console.error(err);
@@ -1159,4 +1337,102 @@ function showToast(msg) {
   setTimeout(() => {
     toast.classList.add('translate-y-20', 'opacity-0');
   }, 2600);
+}
+
+// ----------------- AI Receipt Scanner & Settings -----------------
+
+function openReceiptCamera() {
+  openModal('expense');
+  setTimeout(() => {
+    const input = document.getElementById('receiptFileInput');
+    if (input) input.click();
+  }, 150);
+}
+
+async function handleReceiptFile(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  const overlay = document.getElementById('receiptScanningOverlay');
+  if (overlay) overlay.classList.remove('hidden');
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch('/api/receipt/scan', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+
+    if (!data.success) {
+      if (data.error === 'GEMINI_API_KEY_REQUIRED') {
+        alert("구글 Gemini API 키(무료)가 등록되지 않았습니다.\n\n[설정] 메뉴에서 무료 API 키를 1회 등록하시면 영수증 자동 입력이 바로 작동합니다!");
+        switchTab('tab-settings');
+        closeModal('txModal');
+      } else {
+        alert(data.message || "영수증 분석에 실패했습니다. 사진이 흐리거나 영수증 형태가 아닐 수 있습니다.");
+      }
+      return;
+    }
+
+    // AI 자동 추출 데이터 가계부 입력창에 채우기
+    if (data.amount) {
+      document.getElementById('txAmountInput').value = data.amount;
+    }
+    if (data.date) {
+      document.getElementById('txDateInput').value = data.date;
+    }
+    if (data.memo || data.store_name) {
+      document.getElementById('txMemoInput').value = data.memo || data.store_name;
+    }
+    if (data.category) {
+      selectCategoryChip(data.category);
+    }
+
+    showToast("영수증을 AI가 성공적으로 읽었습니다! 📸");
+  } catch (err) {
+    console.error("영수증 스캔 실패:", err);
+    alert("영수증 스캔 중 서버 오류가 발생했습니다: " + err.message);
+  } finally {
+    if (overlay) overlay.classList.add('hidden');
+    event.target.value = '';
+  }
+}
+
+async function loadSettings() {
+  try {
+    const res = await fetch('/api/settings');
+    const settings = await res.json();
+    if (settings && settings.gemini_api_key) {
+      const input = document.getElementById('geminiApiKeyInput');
+      if (input) input.value = settings.gemini_api_key;
+    }
+  } catch (err) {
+    console.error("설정 로드 실패:", err);
+  }
+}
+
+async function saveGeminiApiKey() {
+  const keyInput = document.getElementById('geminiApiKeyInput');
+  const key = keyInput.value.trim();
+  if (!key) {
+    alert("구글 Gemini API 키를 입력해주세요.");
+    return;
+  }
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gemini_api_key: key })
+    });
+    if (res.ok) {
+      showToast("Gemini API 키가 안전하게 저장되었습니다! ✨");
+    } else {
+      alert("API 키 저장에 실패했습니다.");
+    }
+  } catch (err) {
+    alert("저장 오류: " + err.message);
+  }
 }
