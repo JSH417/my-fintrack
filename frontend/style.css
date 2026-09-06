@@ -1,0 +1,114 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+  letter-spacing: -0.015em;
+  background-color: #F8FAFC;
+}
+
+/* Senior / Large font mode */
+body.font-large {
+  font-size: 1.125rem; /* 18px */
+}
+
+body.font-large h1 {
+  font-size: 1.65rem;
+}
+
+body.font-large h2 {
+  font-size: 1.5rem;
+}
+
+body.font-large h3 {
+  font-size: 1.35rem;
+}
+
+body.font-large .text-xs {
+  font-size: 0.85rem;
+}
+
+body.font-large .text-sm {
+  font-size: 1rem;
+}
+
+body.font-large .text-2xl {
+  font-size: 2rem;
+}
+
+/* Tab active state transition */
+.nav-tab {
+  transition: all 0.2s ease-in-out;
+}
+
+.nav-tab.active {
+  color: #4F46E5;
+  border-bottom-color: #4F46E5;
+  font-weight: 700;
+}
+
+/* Modal Animations */
+@keyframes scaleUp {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scaleUp {
+  animation: scaleUp 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Calendar Day Cell Styles */
+.cal-day-cell {
+  background-color: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 0.75rem;
+  padding: 0.5rem;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.cal-day-cell:hover {
+  border-color: #6366F1;
+  background-color: #F8FAFC;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.cal-day-cell.is-today {
+  border: 2px solid #4F46E5;
+  background-color: #EEF2FF;
+}
+
+.cal-day-cell.other-month {
+  opacity: 0.35;
+  background-color: #F1F5F9;
+  cursor: default;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
