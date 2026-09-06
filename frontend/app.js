@@ -11,9 +11,10 @@ let selectedCalDate = null;
 
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', async () => {
-  // Check URL query param e.g. ?profile=me or ?profile=mom
   const urlParams = new URLSearchParams(window.location.search);
-  const pParam = urlParams.get('profile');
+  const pParam = urlParams.get('profile') || urlParams.get('user');
+  const lockParam = urlParams.get('lock') || urlParams.get('only');
+
   if (pParam === 'me' || pParam === 'mom') {
     currentProfile = pParam;
   } else {
@@ -21,8 +22,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (saved === 'me' || saved === 'mom') currentProfile = saved;
   }
 
+  // Standalone mode check (어머니 폰에서는 내 가계부 전환 버튼을 아예 숨김)
+  const isLocked = lockParam === 'true' || lockParam === 'mom' || urlParams.get('user') === 'mom';
+  if (isLocked) {
+    currentProfile = 'mom';
+    document.getElementById('profileSwitcherBox').classList.add('hidden');
+    document.getElementById('standaloneTitleBox').classList.remove('hidden');
+  }
+
   setupEventListeners();
-  await switchProfile(currentProfile, false);
+  await switchProfile(currentProfile, false, isLocked);
   await loadCategories();
 });
 
@@ -57,7 +66,7 @@ function setupEventListeners() {
 
 // ----------------- Multi-Profile Switching -----------------
 
-async function switchProfile(profileId, showMessage = true) {
+async function switchProfile(profileId, showMessage = true, isLocked = false) {
   currentProfile = profileId;
   localStorage.setItem('fintrack_active_profile', profileId);
 
@@ -65,6 +74,13 @@ async function switchProfile(profileId, showMessage = true) {
   const newUrl = new URL(window.location);
   newUrl.searchParams.set('profile', profileId);
   window.history.replaceState({}, '', newUrl);
+
+  const switcher = document.getElementById('profileSwitcherBox');
+  const standaloneTitle = document.getElementById('standaloneTitleBox');
+  if (isLocked) {
+    if (switcher) switcher.classList.add('hidden');
+    if (standaloneTitle) standaloneTitle.classList.remove('hidden');
+  }
 
   const btnMom = document.getElementById('profileBtnMom');
   const btnMe = document.getElementById('profileBtnMe');

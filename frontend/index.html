@@ -46,8 +46,14 @@
       
       <!-- Profile Switcher & Logo -->
       <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Standalone Single-User Title (Hidden by default, shown in ?user=mom mode) -->
+        <div id="standaloneTitleBox" class="hidden flex items-center gap-2">
+          <span id="standaloneIcon" class="text-2xl">🌸</span>
+          <h1 id="standaloneTitle" class="text-base sm:text-lg font-black text-slate-900">어머니 행복 가계부</h1>
+        </div>
+
         <!-- Family Profile Switcher (Pill Toggle) -->
-        <div class="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold shadow-2xs">
+        <div id="profileSwitcherBox" class="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold shadow-2xs">
           <button id="profileBtnMom" onclick="switchProfile('mom')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition bg-white text-emerald-700 shadow-xs font-black">
             <span>🌸</span>
             <span>어머니 가계부</span>
