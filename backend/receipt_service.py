@@ -34,14 +34,44 @@ def get_gemini_api_key() -> Optional[str]:
 
     return None
 
+def get_available_gemini_models(key: str) -> list:
+    """구글 API 키로 현재 활성화된 최신 Gemini Flash 모델 목록 자동 감지"""
+    fallback_list = [
+        "gemini-2.5-flash",
+        "gemini-3.5-flash",
+        "gemini-3.7-flash",
+        "gemini-3.8-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash"
+    ]
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            models = data.get("models", [])
+            valid_models = []
+            for m in models:
+                methods = m.get("supportedGenerationMethods", [])
+                name = m.get("name", "").replace("models/", "")
+                if "generateContent" in methods and "flash" in name.lower():
+                    valid_models.append(name)
+            if valid_models:
+                valid_models.sort(reverse=True)
+                return valid_models
+    except Exception as e:
+        print(f"모델 목록 자동 감지 중 오류: {e}")
+    return fallback_list
+
 def analyze_receipt_with_gemini(image_bytes: bytes, mime_type: str = "image/jpeg", api_key: Optional[str] = None) -> Dict[str, Any]:
-    """Gemini 1.5 Flash Vision API를 사용하여 영수증 이미지 분석 및 JSON 데이터 추출"""
+    """Gemini Vision API를 사용하여 영수증 이미지 분석 및 JSON 데이터 추출"""
     key = api_key or get_gemini_api_key()
     if not key:
         return {
             "success": False,
             "error": "GEMINI_API_KEY_REQUIRED",
-            "message": "Gemini API 키가 등록되지 않았습니다. [설정] 메뉴에서 무료 API 키를 등록해주세요."
+            "message": "Gemini API 키가 등록되지 않았습니다. Render 환경변수(GEMINI_API_KEY) 또는 [설정] 메뉴에 무료 API 키를 등록해주세요."
         }
 
     b64_image = base64.b64encode(image_bytes).decode("utf-8")
@@ -62,8 +92,8 @@ def analyze_receipt_with_gemini(image_bytes: bytes, mime_type: str = "image/jpeg
     }}
     """
 
-    # Gemini endpoint (supports 1.5 flash and 2.0 flash)
-    models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash"]
+    # 현재 사용 가능한 모델 자동 감지 (최신 3.x / 2.5 지원)
+    models_to_try = get_available_gemini_models(key)
     last_error = ""
 
     for model_name in models_to_try:
