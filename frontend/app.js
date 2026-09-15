@@ -13,17 +13,19 @@ let isSiteLocked = false;
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', async () => {
   // Check server configuration (APP_PROFILE set in Render / environment)
-  let serverAppProfile = null;
-  try {
-    const cfgRes = await fetch('/api/config');
-    if (cfgRes.ok) {
-      const cfg = await cfgRes.json();
-      if (cfg && (cfg.app_profile === 'mom' || cfg.app_profile === 'me')) {
-        serverAppProfile = cfg.app_profile;
+  let serverAppProfile = window.SERVER_APP_PROFILE || null;
+  if (!serverAppProfile) {
+    try {
+      const cfgRes = await fetch('/api/config');
+      if (cfgRes.ok) {
+        const cfg = await cfgRes.json();
+        if (cfg && (cfg.app_profile === 'mom' || cfg.app_profile === 'me')) {
+          serverAppProfile = cfg.app_profile;
+        }
       }
+    } catch (e) {
+      console.warn('Failed to load /api/config', e);
     }
-  } catch (e) {
-    console.warn('Failed to load /api/config', e);
   }
 
   const urlParams = new URLSearchParams(window.location.search);
