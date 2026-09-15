@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>행복 가계부 & 자산관리</title>
+  <!-- Mobile PWA / Web App Meta -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="행복가계부">
+  <meta name="theme-color" content="#4F46E5">
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2953/2953363.png">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#EEF2FF',
+              100: '#E0E7FF',
+              500: '#4F46E5',
+              600: '#4338CA',
+              700: '#3730A3',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col font-sans transition-colors duration-200 pb-20 sm:pb-6">
+
+  <!-- Top Navbar -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2">
+      
+      <!-- Profile Switcher & Logo -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Standalone Single-User Title (Hidden by default, shown in ?user=mom mode) -->
+        <div id="standaloneTitleBox" class="hidden flex items-center gap-2">
+          <span id="standaloneIcon" class="text-2xl">🌸</span>
+          <h1 id="standaloneTitle" class="text-base sm:text-lg font-black text-slate-900">어머니 행복 가계부</h1>
+        </div>
+
+        <!-- Family Profile Switcher (Pill Toggle) -->
+        <div id="profileSwitcherBox" class="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold shadow-2xs">
+          <button id="profileBtnMom" onclick="switchProfile('mom')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition bg-white text-emerald-700 shadow-xs font-black">
+            <span>🌸</span>
+            <span>어머니 가계부</span>
+          </button>
+          <button id="profileBtnMe" onclick="switchProfile('me')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition text-slate-600 hover:text-slate-900 font-bold">
+            <span>👤</span>
+            <span>내 가계부</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Right Controls: Month Selector & Quick Add -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Month Selector -->
+        <div class="flex items-center bg-slate-100 rounded-xl p-1 text-xs sm:text-sm">
+          <button id="prevMonthBtn" class="px-2 py-1 hover:bg-white rounded-lg text-slate-600 hover:text-slate-900 transition" title="이전 달">
+            <i class="fa-solid fa-chevron-left text-xs"></i>
+          </button>
+          <span id="currentMonthLabel" class="px-1.5 sm:px-2 font-bold text-slate-800 select-none min-w-[70px] sm:min-w-[80px] text-center">2026.09</span>
+          <button id="nextMonthBtn" class="px-2 py-1 hover:bg-white rounded-lg text-slate-600 hover:text-slate-900 transition" title="다음 달">
+            <i class="fa-solid fa-chevron-right text-xs"></i>
+          </button>
+        </div>
+
+        <!-- Quick Add Transaction Button -->
+        <button id="openQuickAddBtn" class="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-indigo-100 transition active:scale-95">
+          <i class="fa-solid fa-plus text-xs"></i>
+          <span class="hidden xs:inline">기록하기</span>
+          <span class="xs:hidden">쓰기</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Desktop Navigation Tabs -->
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 hidden sm:block">
+      <nav class="flex space-x-1 sm:space-x-4 border-t border-slate-100 pt-1 overflow-x-auto text-sm font-medium" id="mainNav">
+        <button data-tab="tab-dashboard" class="nav-tab active flex items-center gap-2 py-3 px-3 text-indigo-600 border-b-2 border-indigo-600 font-bold whitespace-nowrap">
+          <i class="fa-solid fa-house"></i>
+          <span>홈 (요약)</span>
+        </button>
+        <button data-tab="tab-transactions" class="nav-tab flex items-center gap-2 py-3 px-3 text-slate-500 hover:text-slate-800 border-b-2 border-transparent whitespace-nowrap">
+          <i class="fa-solid fa-list-check"></i>
+          <span>내역 보기</span>
+        </button>
+        <button data-tab="tab-calendar" class="nav-tab flex items-center gap-2 py-3 px-3 text-slate-500 hover:text-slate-800 border-b-2 border-transparent whitespace-nowrap">
+          <i class="fa-regular fa-calendar-days"></i>
+          <span>달력 (캘린더)</span>
+        </button>
+        <button data-tab="tab-budget" class="nav-tab flex items-center gap-2 py-3 px-3 text-slate-500 hover:text-slate-800 border-b-2 border-transparent whitespace-nowrap">
+          <i class="fa-solid fa-bullseye"></i>
+          <span>예산 관리</span>
+        </button>
+
+        <!-- Investment Tab (Shown only for Me / Pro Mode) -->
+        <button data-tab="tab-investments" id="investNavTab" class="nav-tab hidden flex items-center gap-2 py-3 px-3 text-slate-500 hover:text-slate-800 border-b-2 border-transparent whitespace-nowrap">
+          <i class="fa-solid fa-arrow-trend-up text-indigo-500"></i>
+          <span>투자 포트폴리오</span>
+        </button>
+
+        <button data-tab="tab-accounts" class="nav-tab flex items-center gap-2 py-3 px-3 text-slate-500 hover:text-slate-800 border-b-2 border-transparent whitespace-nowrap">
+          <i class="fa-solid fa-credit-card"></i>
+          <span>내 통장/지갑</span>
+        </button>
+        <button data-tab="tab-settings" class="nav-tab flex items-center gap-2 py-3 px-3 text-slate-500 hover:text-slate-800 border-b-2 border-transparent whitespace-nowrap">
+          <i class="fa-solid fa-gear"></i>
+          <span>설정</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-6xl w-full mx-auto px-4 sm:px-6 py-4 sm:py-6 flex-1">
+
+    <!-- ================= TAB 1: DASHBOARD ================= -->
+    <section id="tab-dashboard" class="tab-pane active space-y-4 sm:space-y-6">
+
+      <!-- Profile Intro Banner -->
+      <div id="profileBanner" class="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+        <div class="flex items-center gap-3">
+          <div id="profileBannerIcon" class="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 text-lg shadow-xs">
+            🌸
+          </div>
+          <div>
+            <h2 id="profileBannerTitle" class="text-base font-bold text-emerald-900">어머니 전용 간편 가계부 화면입니다</h2>
+            <p id="profileBannerDesc" class="text-xs text-emerald-700">복잡한 주식/투자 없이 오늘 쓴 돈과 남은 예산을 편하게 확인하세요.</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 text-xs font-bold text-emerald-800">
+          <span class="px-2.5 py-1 rounded-lg bg-white border border-emerald-200" id="profileBadgeText">독립 장부</span>
+        </div>
+      </div>
+
+      <!-- Net Worth Card (Shown only in Me / Investment Mode) -->
+      <div id="netWorthCard" class="hidden bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden">
+        <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2 text-indigo-300 text-sm font-medium mb-1">
+              <span>내 총 순자산 (통장 잔고 + 투자 평가금)</span>
+              <span class="text-xs bg-indigo-500/30 px-2 py-0.5 rounded border border-indigo-400/30 text-indigo-200">실시간 연동</span>
+            </div>
+            <div class="text-3xl sm:text-4xl font-extrabold tracking-tight" id="dashNetWorth">0원</div>
+            <div class="text-xs text-indigo-200/80 mt-1 flex items-center gap-3">
+              <span>통장 잔고: <b id="dashNetCash" class="text-white">0원</b></span>
+              <span>·</span>
+              <span>투자 평가액: <b id="dashNetInvest" class="text-emerald-300">0원</b></span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="dashRefreshPricesBtn" class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg transition active:scale-95">
+              <i class="fa-solid fa-arrows-rotate"></i>
+              <span>시세 실시간 새로고침</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Monthly Summary KPI Cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <!-- Card 1: Today Spent -->
+        <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs sm:text-sm font-bold text-slate-500">오늘 쓴 돈</span>
+            <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-red-50 text-red-500 flex items-center justify-center text-xs sm:text-sm font-bold">
+              <i class="fa-solid fa-receipt"></i>
+            </span>
+          </div>
+          <div>
+            <div class="text-xl sm:text-2xl font-black text-slate-900" id="dashTodayExpense">0원</div>
+            <p class="text-[11px] text-slate-400 mt-1" id="dashTodayDate">오늘 지출</p>
+          </div>
+        </div>
+
+        <!-- Card 2: This Month Expense -->
+        <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs sm:text-sm font-bold text-slate-500">이번 달 총 지출</span>
+            <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-xs sm:text-sm font-bold">
+              <i class="fa-solid fa-arrow-trend-down"></i>
+            </span>
+          </div>
+          <div>
+            <div class="text-xl sm:text-2xl font-black text-rose-600" id="dashMonthExpense">0원</div>
+            <p class="text-[11px] text-slate-400 mt-1">이번 달 누적 지출</p>
+          </div>
+        </div>
+
+        <!-- Card 3: This Month Income -->
+        <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs sm:text-sm font-bold text-slate-500">이번 달 총 수입</span>
+            <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs sm:text-sm font-bold">
+              <i class="fa-solid fa-arrow-trend-up"></i>
+            </span>
+          </div>
+          <div>
+            <div class="text-xl sm:text-2xl font-black text-emerald-600" id="dashMonthIncome">0원</div>
+            <p class="text-[11px] text-slate-400 mt-1">월급, 용돈, 부수입</p>
+          </div>
+        </div>
+
+        <!-- Card 4: Month Net Balance / Budget -->
+        <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs sm:text-sm font-bold text-slate-500">이번 달 남은 돈</span>
+            <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs sm:text-sm font-bold">
+              <i class="fa-solid fa-piggy-bank"></i>
+            </span>
+          </div>
+          <div>
+            <div class="text-xl sm:text-2xl font-black text-indigo-600" id="dashMonthNet">0원</div>
+            <p class="text-[11px] text-slate-400 mt-1">수입 - 지출 잔액</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Action Buttons for Mother (Big, Friendly) -->
+      <div class="space-y-3">
+        <!-- AI Receipt Camera Scanner Quick Button -->
+        <button onclick="openReceiptCamera()" class="w-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl p-4 flex items-center justify-between shadow-md shadow-amber-200 transition active:scale-98 border-2 border-amber-300 cursor-pointer">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-2xl flex-shrink-0 shadow-xs">
+              <i class="fa-solid fa-camera"></i>
+            </div>
+            <div class="text-left">
+              <div class="text-base sm:text-lg font-black leading-tight flex items-center gap-2">
+                <span>영수증 사진 찍어서 자동 입력</span>
+                <span class="text-[10px] bg-white text-orange-600 font-black px-1.5 py-0.5 rounded shadow-2xs">AI 찰칵</span>
+              </div>
+              <div class="text-xs text-amber-100 font-medium mt-0.5">카메라로 찰칵 찍으면 금액·가게 1초 만에 자동 채우기</div>
+            </div>
+          </div>
+          <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white text-sm flex-shrink-0">
+            <i class="fa-solid fa-chevron-right"></i>
+          </div>
+        </button>
+
+        <div class="grid grid-cols-2 gap-3 sm:gap-4">
+          <button onclick="openModal('expense')" class="bg-white hover:bg-red-50/60 border-2 border-red-200 hover:border-red-400 rounded-2xl p-4 sm:p-5 flex items-center justify-center gap-2 sm:gap-3 text-red-600 font-extrabold text-base sm:text-lg shadow-xs transition active:scale-98">
+            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-red-500 text-white flex items-center justify-center text-lg sm:text-xl shadow-md shadow-red-200">
+              <i class="fa-solid fa-minus"></i>
+            </div>
+            <span>- 쓴 돈 쓰기</span>
+          </button>
+          <button onclick="openModal('income')" class="bg-white hover:bg-emerald-50/60 border-2 border-emerald-200 hover:border-emerald-400 rounded-2xl p-4 sm:p-5 flex items-center justify-center gap-2 sm:gap-3 text-emerald-600 font-extrabold text-base sm:text-lg shadow-xs transition active:scale-98">
+            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-500 text-white flex items-center justify-center text-lg sm:text-xl shadow-md shadow-emerald-200">
+              <i class="fa-solid fa-plus"></i>
+            </div>
+            <span>+ 번 돈 쓰기</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Two Column Layout: Budget Progress & Recent Transactions -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        <!-- Left 2 Cols: Recent Transactions -->
+        <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <h3 class="text-base sm:text-lg font-bold text-slate-900">최근 거래 내역</h3>
+              <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold" id="recentTxCount">0건</span>
+            </div>
+            <button onclick="switchTab('tab-transactions')" class="text-xs font-bold text-indigo-600 hover:text-indigo-800">
+              전체보기 &rarr;
+            </button>
+          </div>
+
+          <div id="recentTxList" class="space-y-3">
+            <!-- Dynamic Content -->
+            <div class="text-center py-12 text-slate-400">
+              <i class="fa-regular fa-clipboard text-4xl mb-3 text-slate-300"></i>
+              <p class="text-sm font-medium">아직 등록된 거래 내역이 없습니다.</p>
+              <p class="text-xs text-slate-400 mt-1">위의 [쓴 돈 쓰기] 버튼을 눌러 첫 지출을 기록해보세요!</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right 1 Col: Budget & Category Summary -->
+        <div class="space-y-4 sm:space-y-6">
+          <!-- Budget Progress Card -->
+          <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-base font-bold text-slate-900">이번 달 예산 현황</h3>
+              <button onclick="switchTab('tab-budget')" class="text-xs font-bold text-indigo-600 hover:text-indigo-800">
+                예산 설정
+              </button>
+            </div>
+            <div id="dashBudgetBox">
+              <div class="flex justify-between text-xs text-slate-500 mb-1">
+                <span>지출 소진율</span>
+                <span id="dashBudgetPct" class="font-bold text-indigo-600">0%</span>
+              </div>
+              <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                <div id="dashBudgetBar" class="bg-indigo-600 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+              </div>
+              <div class="flex justify-between text-xs font-medium text-slate-600 mt-2">
+                <span>지출: <b id="dashBudgetSpent">0원</b></span>
+                <span>목표: <b id="dashBudgetTotal">0원</b></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Investment Overview (Shown only in Me / Investment Mode) -->
+          <div id="dashInvestBox" class="hidden bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-base font-bold text-slate-900">내 투자 포트폴리오 요약</h3>
+              <button onclick="switchTab('tab-investments')" class="text-xs font-bold text-indigo-600 hover:text-indigo-800">
+                상세보기
+              </button>
+            </div>
+            <div class="space-y-3 text-sm">
+              <div class="flex justify-between py-1 border-b border-slate-100">
+                <span class="text-slate-500">총 투자원금</span>
+                <span class="font-bold" id="dashInvestCost">0원</span>
+              </div>
+              <div class="flex justify-between py-1 border-b border-slate-100">
+                <span class="text-slate-500">총 평가금액</span>
+                <span class="font-bold text-slate-900" id="dashInvestValue">0원</span>
+              </div>
+              <div class="flex justify-between py-1">
+                <span class="text-slate-500">평가손익 (수익률)</span>
+                <span class="font-black" id="dashInvestProfit">0원 (0.0%)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= TAB 2: TRANSACTIONS LIST ================= -->
+    <section id="tab-transactions" class="tab-pane hidden space-y-4 sm:space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
+          <div>
+            <h2 class="text-xl font-bold text-slate-900" id="txPageTitle">상세 거래 내역</h2>
+            <p class="text-xs text-slate-500">수입, 지출, 이체 내역을 검색하고 관리합니다.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <select id="txFilterType" class="text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-700 font-medium">
+              <option value="all">전체 (수입+지출+이체)</option>
+              <option value="expense">지출만 보기</option>
+              <option value="income">수입만 보기</option>
+              <option value="transfer">이체만 보기</option>
+            </select>
+            <input type="text" id="txSearchKeyword" placeholder="메모 또는 카테고리 검색" class="text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-700 w-44">
+            <button onclick="loadTransactions()" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-sm font-bold transition">
+              <i class="fa-solid fa-magnifying-glass"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+              <tr>
+                <th class="py-3 px-3">날짜</th>
+                <th class="py-3 px-3">구분</th>
+                <th class="py-3 px-3">카테고리</th>
+                <th class="py-3 px-3">내용 (메모)</th>
+                <th class="py-3 px-3">결제 통장</th>
+                <th class="py-3 px-3 text-right">금액</th>
+                <th class="py-3 px-3 text-center">관리</th>
+              </tr>
+            </thead>
+            <tbody id="txFullTableBody" class="divide-y divide-slate-100">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= TAB 3: CALENDAR VIEW ================= -->
+    <section id="tab-calendar" class="tab-pane hidden space-y-4 sm:space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg sm:text-xl font-bold text-slate-900">가계부 달력</h2>
+            <p class="text-xs text-slate-500">날짜별로 지출과 수입을 한눈에 살펴보세요.</p>
+          </div>
+          <div class="flex items-center gap-3 text-xs font-bold">
+            <span class="flex items-center gap-1 text-red-500"><i class="fa-solid fa-circle text-[8px]"></i> 지출</span>
+            <span class="flex items-center gap-1 text-emerald-600"><i class="fa-solid fa-circle text-[8px]"></i> 수입</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-7 gap-1 text-center font-bold text-xs py-2 bg-slate-50 rounded-xl text-slate-500 mb-2">
+          <div class="text-red-500">일</div>
+          <div>월</div>
+          <div>화</div>
+          <div>수</div>
+          <div>목</div>
+          <div>금</div>
+          <div class="text-blue-500">토</div>
+        </div>
+
+        <div id="calendarGrid" class="grid grid-cols-7 gap-1 sm:gap-1.5 min-h-[400px]">
+          <!-- Rendered via JS -->
+        </div>
+      </div>
+
+      <div id="calendarDetailBox" class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hidden">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+            <i class="fa-regular fa-calendar-check text-indigo-600"></i>
+            <span id="calSelectedDateText">2026-09-01 내역</span>
+          </h3>
+          <button onclick="openModalForDate()" class="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-bold px-3 py-1.5 rounded-lg">
+            + 이 날짜에 추가
+          </button>
+        </div>
+        <div id="calDayTxList" class="space-y-2 text-sm"></div>
+      </div>
+    </section>
+
+
+    <!-- ================= TAB 4: BUDGET MANAGEMENT ================= -->
+    <section id="tab-budget" class="tab-pane hidden space-y-4 sm:space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+          <div>
+            <h2 class="text-xl font-bold text-slate-900">카테고리별 예산 관리</h2>
+            <p class="text-xs text-slate-500">한 달 동안 각 항목마다 쓸 금액을 정해두고 계획적인 소비를 실천하세요.</p>
+          </div>
+          <div class="bg-slate-50 px-4 py-2 rounded-xl border border-slate-200 text-right">
+            <span class="text-xs text-slate-500 block">이번 달 남은 예산</span>
+            <span class="text-lg font-black text-indigo-600" id="budgetRemainingTotal">0원</span>
+          </div>
+        </div>
+
+        <div id="budgetCategoryList" class="space-y-3 sm:space-y-4"></div>
+      </div>
+    </section>
+
+
+    <!-- ================= TAB 5: INVESTMENTS (PORTFOLIO) ================= -->
+    <section id="tab-investments" class="tab-pane hidden space-y-4 sm:space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+          <span class="text-xs font-bold text-slate-500">총 투자 평가금액</span>
+          <div class="text-2xl font-black text-slate-900 mt-1" id="invTotalValue">0원</div>
+          <span class="text-xs text-slate-400 mt-1 block">원금: <b id="invTotalCost">0원</b></span>
+        </div>
+
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+          <span class="text-xs font-bold text-slate-500">총 평가손익</span>
+          <div class="text-2xl font-black mt-1" id="invTotalProfit">0원</div>
+          <span class="text-xs text-slate-400 mt-1 block">수익률: <b id="invTotalRate">0.0%</b></span>
+        </div>
+
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div>
+            <span class="text-xs font-bold text-slate-500">실시간 기준 환율</span>
+            <div class="text-xl font-extrabold text-slate-800 mt-1">1 USD = <span id="invUsdRate">1,350</span>원</div>
+          </div>
+          <button id="refreshPricesBtn" class="mt-2 flex items-center justify-center gap-2 w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl transition">
+            <i class="fa-solid fa-arrows-rotate"></i>
+            <span>전 종목 시세 새로고침</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-slate-800 text-sm">보유 종목 목록</span>
+          <span id="holdingCountBadge" class="text-xs bg-slate-100 px-2 py-0.5 rounded-full text-slate-600 font-bold">0개</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="openTradeModal()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs">
+            <i class="fa-solid fa-hand-holding-dollar"></i>
+            <span>매매/배당 기록</span>
+          </button>
+          <button onclick="openAddInvestmentModal()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-indigo-100">
+            <i class="fa-solid fa-plus"></i>
+            <span>+ 새 종목 추가</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                <tr>
+                  <th class="py-3 px-3">종목명/티커</th>
+                  <th class="py-3 px-3">구분</th>
+                  <th class="py-3 px-3 text-right">보유수량</th>
+                  <th class="py-3 px-3 text-right">매수평단</th>
+                  <th class="py-3 px-3 text-right">현재가</th>
+                  <th class="py-3 px-3 text-right">평가손익(수익률)</th>
+                  <th class="py-3 px-3 text-center">관리</th>
+                </tr>
+              </thead>
+              <tbody id="holdingsTableBody" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col items-center justify-center">
+          <h4 class="text-sm font-bold text-slate-800 mb-4 w-full text-left">자산군별 배분 비중</h4>
+          <div class="w-44 h-44 relative">
+            <canvas id="allocationChart"></canvas>
+          </div>
+          <div id="allocationLegend" class="mt-4 w-full space-y-1 text-xs text-slate-600"></div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= TAB 6: ACCOUNTS & WALLETS ================= -->
+    <section id="tab-accounts" class="tab-pane hidden space-y-4 sm:space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-xl font-bold text-slate-900" id="accountsPageTitle">통장 및 지갑 관리</h2>
+            <p class="text-xs text-slate-500">현재 프로필의 통장, 현금, 증권계좌 잔액을 관리합니다.</p>
+          </div>
+          <button onclick="openAddAccountModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs">
+            <i class="fa-solid fa-plus"></i>
+            <span>+ 계좌 추가</span>
+          </button>
+        </div>
+
+        <div id="accountsListGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+      </div>
+    </section>
+
+
+    <!-- ================= TAB 7: SETTINGS & MOBILE ================= -->
+    <section id="tab-settings" class="tab-pane hidden space-y-4 sm:space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs max-w-2xl mx-auto space-y-6 sm:space-y-8">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">프로그램 설정 &amp; 스마트폰 연동</h2>
+          <p class="text-xs text-slate-500">프로필 환경 설정과 스마트폰 접속 방법을 안내합니다.</p>
+        </div>
+
+        <!-- Setting 1: Smartphone Access Guide -->
+        <div class="border-t border-slate-100 pt-6">
+          <label class="block text-sm font-bold text-slate-900 mb-1 flex items-center gap-2">
+            <i class="fa-solid fa-mobile-screen-button text-indigo-600"></i>
+            <span>스마트폰으로 편하게 쓰는 방법</span>
+          </label>
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs text-slate-700 mt-2">
+            <p class="font-bold text-slate-900">1. 집 Wi-Fi에서 휴대폰으로 바로 접속:</p>
+            <p class="bg-white p-2 rounded-lg border border-slate-200 font-mono text-indigo-600 font-bold select-all">
+              http://<span id="guideLocalIp">192.168.219.115</span>:8000
+            </p>
+            <p class="font-bold text-slate-900 pt-1">2. 24시간 언제 어디서나 외부에서 쓰기 (방법 B):</p>
+            <p class="text-slate-600">Render 무료 클라우드에 올려두시면 PC를 꺼두어도 24시간 스마트폰 앱으로 동작합니다. (하단 배포 가이드 문서 참조)</p>
+            <p class="font-bold text-slate-900 pt-1">3. 스마트폰 홈 화면에 바로가기 앱 만들기:</p>
+            <p class="text-slate-600">휴대폰 인터넷 창 하단(또는 우측상단)의 [공유/메뉴] &rarr; <b>[홈 화면에 추가]</b>를 누르면 진짜 앱 아이콘이 생깁니다!</p>
+          </div>
+        </div>
+
+        <!-- Setting 2: Font Size -->
+        <div class="border-t border-slate-100 pt-6">
+          <label class="block text-sm font-bold text-slate-900 mb-1">글자 크기 (시니어 배려)</label>
+          <p class="text-xs text-slate-500 mb-3">글씨가 작아 보기 힘드신 경우 '큼직하게 보기'를 선택하세요.</p>
+          <div class="flex gap-3">
+            <button onclick="setFontSize('normal')" id="fontNormalBtn" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-bold hover:bg-slate-50">
+              보통 글씨
+            </button>
+            <button onclick="setFontSize('large')" id="fontLargeBtn" class="flex-1 py-2.5 rounded-xl border-2 border-indigo-600 bg-indigo-50 text-indigo-700 text-base font-extrabold shadow-xs">
+              큼직하게 보기 (권장)
+            </button>
+          </div>
+        </div>
+
+        <!-- Setting 3: Gemini API Key for AI Camera Receipt Scanner -->
+        <div class="border-t border-slate-100 pt-6">
+          <label class="block text-sm font-bold text-slate-900 mb-1 flex items-center justify-between">
+            <span class="flex items-center gap-2">
+              <i class="fa-solid fa-camera text-amber-500"></i>
+              <span>AI 영수증 촬영용 Google Gemini API 키 (무료)</span>
+            </span>
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-xs text-indigo-600 hover:text-indigo-800 font-bold underline">
+              무료 키 1분 발급 &rarr;
+            </a>
+          </label>
+          <p class="text-xs text-slate-500 mb-2">구글 AI Studio에서 무료로 발급받은 API 키를 넣으시면 영수증 사진을 찍었을 때 금액과 상호명을 1초 만에 자동 입력해줍니다.</p>
+          <div class="flex gap-2">
+            <input type="password" id="geminiApiKeyInput" placeholder="AIzaSy... 키를 입력하세요" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono">
+            <button onclick="saveGeminiApiKey()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition whitespace-nowrap">
+              저장
+            </button>
+          </div>
+        </div>
+
+        <!-- Setting 4: Data Management -->
+        <div id="settingDataResetBox" class="border-t border-slate-100 pt-6">
+          <label class="block text-sm font-bold text-slate-900 mb-1">데이터 관리</label>
+          <p class="text-xs text-slate-500 mb-3">모든 데이터를 깨끗하게 비우거나, 둘러보기용 샘플 데이터를 채울 수 있습니다.</p>
+          <div class="flex flex-wrap gap-3">
+            <button onclick="confirmResetData()" class="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-bold border border-red-200 transition">
+              <i class="fa-solid fa-trash-can mr-1"></i> 데이터 완전 초기화 (빈 상태)
+            </button>
+            <button onclick="confirmLoadSample()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition">
+              <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> 샘플 데이터 채워보기
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Mobile Bottom Navigation Bar (Smartphones Only) -->
+  <nav class="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-40 px-2 py-1.5 flex justify-around shadow-lg">
+    <button onclick="switchTab('tab-dashboard')" class="mobile-nav-btn active flex flex-col items-center text-indigo-600 py-1" data-tab="tab-dashboard">
+      <i class="fa-solid fa-house text-lg"></i>
+      <span class="text-[10px] font-bold mt-0.5">홈</span>
+    </button>
+    <button onclick="switchTab('tab-transactions')" class="mobile-nav-btn flex flex-col items-center text-slate-400 py-1" data-tab="tab-transactions">
+      <i class="fa-solid fa-list-check text-lg"></i>
+      <span class="text-[10px] font-bold mt-0.5">내역</span>
+    </button>
+    <button onclick="openModal('expense')" class="flex flex-col items-center justify-center -mt-5 bg-indigo-600 text-white w-12 h-12 rounded-full shadow-lg active:scale-95">
+      <i class="fa-solid fa-plus text-xl"></i>
+    </button>
+    <button onclick="switchTab('tab-calendar')" class="mobile-nav-btn flex flex-col items-center text-slate-400 py-1" data-tab="tab-calendar">
+      <i class="fa-regular fa-calendar-days text-lg"></i>
+      <span class="text-[10px] font-bold mt-0.5">달력</span>
+    </button>
+    <button onclick="switchTab('tab-investments')" id="mobileInvestNavBtn" class="mobile-nav-btn hidden flex flex-col items-center text-slate-400 py-1" data-tab="tab-investments">
+      <i class="fa-solid fa-arrow-trend-up text-lg text-indigo-500"></i>
+      <span class="text-[10px] font-bold mt-0.5">투자</span>
+    </button>
+    <button onclick="switchTab('tab-settings')" class="mobile-nav-btn flex flex-col items-center text-slate-400 py-1" data-tab="tab-settings">
+      <i class="fa-solid fa-gear text-lg"></i>
+      <span class="text-[10px] font-bold mt-0.5">설정</span>
+    </button>
+  </nav>
+
+  <!-- ================= MODAL: QUICK ADD TRANSACTION ================= -->
+  <div id="txModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp relative overflow-hidden">
+
+      <!-- AI Receipt Scanning Overlay -->
+      <div id="receiptScanningOverlay" class="hidden absolute inset-0 bg-white/95 rounded-3xl z-30 flex flex-col items-center justify-center p-6 text-center backdrop-blur-xs">
+        <div class="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-3xl mb-3 animate-bounce">
+          <i class="fa-solid fa-wand-magic-sparkles"></i>
+        </div>
+        <h4 class="text-lg font-black text-slate-900 mb-1">AI가 영수증을 읽고 있습니다...</h4>
+        <p class="text-xs text-slate-500">결제 금액, 날짜, 가게 이름을 1초 만에 분석 중입니다.</p>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-slate-900" id="txModalTitle">가계부 기록하기</h3>
+        <button onclick="closeModal('txModal')" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+      </div>
+
+      <!-- AI Receipt Camera Scanner Button (Big & Friendly) -->
+      <div class="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 rounded-2xl p-3 flex items-center justify-between gap-2 shadow-2xs">
+        <div class="flex items-center gap-2.5">
+          <span class="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center text-base shadow-xs flex-shrink-0">
+            <i class="fa-solid fa-camera"></i>
+          </span>
+          <div>
+            <div class="text-xs font-black text-amber-950">영수증 찰칵! 자동 채우기</div>
+            <div class="text-[11px] text-amber-700">카메라로 찍으면 금액·가게 자동입력</div>
+          </div>
+        </div>
+        <label for="receiptFileInput" class="cursor-pointer px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black shadow-xs transition active:scale-95 flex items-center gap-1.5 whitespace-nowrap">
+          <i class="fa-solid fa-camera-retro"></i>
+          <span>촬영 / 선택</span>
+        </label>
+        <input type="file" id="receiptFileInput" accept="image/*" capture="environment" class="hidden" onchange="handleReceiptFile(event)">
+      </div>
+
+      <div class="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-2xl text-sm font-bold">
+        <button type="button" onclick="setTxModalType('expense')" id="txTypeExpenseBtn" class="py-2 rounded-xl bg-white text-red-600 shadow-xs font-black">지출 (-)</button>
+        <button type="button" onclick="setTxModalType('income')" id="txTypeIncomeBtn" class="py-2 rounded-xl text-slate-600">수입 (+)</button>
+        <button type="button" onclick="setTxModalType('transfer')" id="txTypeTransferBtn" class="py-2 rounded-xl text-slate-600">이체</button>
+      </div>
+
+      <form id="txForm" onsubmit="handleTxSubmit(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">날짜</label>
+          <input type="date" id="txDateInput" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">금액 (원)</label>
+          <div class="relative">
+            <input type="number" id="txAmountInput" placeholder="0" required min="1" step="any" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-2xl font-black text-slate-900 text-right pr-10 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden">
+            <span class="absolute right-3 top-3.5 text-slate-400 font-bold">원</span>
+          </div>
+        </div>
+
+        <div id="txCategoryField">
+          <label class="block text-xs font-bold text-slate-600 mb-1">카테고리</label>
+          <div id="categoryChips" class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-200"></div>
+          <input type="hidden" id="txCategoryInput" value="식비">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3" id="txAccountField">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1" id="txFromAccountLabel">결제 통장</label>
+            <select id="txAccountInput" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800"></select>
+          </div>
+          <div id="txToAccountBox" class="hidden">
+            <label class="block text-xs font-bold text-slate-600 mb-1">받는 계좌</label>
+            <select id="txToAccountInput" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800"></select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">메모 (어디에 썼나요?)</label>
+          <input type="text" id="txMemoInput" placeholder="예: 삼겹살 외식, 장보기 등" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800">
+        </div>
+
+        <div class="flex gap-2 pt-1">
+          <button type="button" id="txModalDeleteBtn" onclick="deleteCurrentEditingTx()" class="hidden py-3 px-4 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl font-bold text-xs transition active:scale-95">
+            <i class="fa-regular fa-trash-can mr-1"></i> 삭제
+          </button>
+          <button type="submit" id="txSubmitBtn" class="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-base shadow-lg shadow-indigo-100 transition active:scale-98">
+            저장하기
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ================= MODAL: ADD INVESTMENT ================= -->
+  <div id="investModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-slate-900">새 투자 종목 추가</h3>
+        <button onclick="closeModal('investModal')" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+      </div>
+
+      <form id="investForm" onsubmit="handleInvestSubmit(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">자산 분류</label>
+          <select id="invCategoryInput" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800" onchange="onInvestCategoryChange()">
+            <option value="kr_stock">국내주식 (삼성전자, 현대차 등)</option>
+            <option value="us_stock">미국주식 (AAPL, TSLA 등)</option>
+            <option value="crypto">가상자산 / 코인 (비트코인, 이더리움)</option>
+            <option value="etf">ETF / 펀드</option>
+            <option value="savings">예금 / 적금</option>
+            <option value="etc">기타 투자자산</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">티커 / 종목코드</label>
+            <input type="text" id="invSymbolInput" placeholder="예: 005930, AAPL, BTC" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">종목명</label>
+            <input type="text" id="invNameInput" placeholder="예: 삼성전자" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">보유 수량</label>
+            <input type="number" id="invQuantityInput" step="any" min="0" placeholder="0" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">매수 평단가</label>
+            <input type="number" id="invAvgPriceInput" step="any" min="0" placeholder="0" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">통화</label>
+            <select id="invCurrencyInput" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800">
+              <option value="KRW">원화 (KRW)</option>
+              <option value="USD">달러 (USD)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">현재가 (선택, 비워두면 자동연동)</label>
+            <input type="number" id="invCurrentPriceInput" step="any" min="0" placeholder="자동 연동" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800">
+          </div>
+        </div>
+
+        <div class="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
+          <label class="block text-xs font-bold text-indigo-900 mb-1">통장 출금 연동 (선택)</label>
+          <select id="invCashAccountInput" class="w-full bg-white border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800">
+            <option value="">연동 안 함 (자산만 등록)</option>
+          </select>
+        </div>
+
+        <button type="submit" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-base shadow-lg shadow-indigo-100 transition">
+          등록하기
+        </button>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ================= MODAL: RECORD TRADE ================= -->
+  <div id="tradeModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-slate-900">매매 및 배당금 기록</h3>
+        <button onclick="closeModal('tradeModal')" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+      </div>
+
+      <form id="tradeForm" onsubmit="handleTradeSubmit(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">대상 종목</label>
+          <select id="tradeHoldingSelect" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800"></select>
+        </div>
+
+        <div class="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+          <button type="button" onclick="setTradeType('buy')" id="tradeTypeBuy" class="py-2 rounded-lg bg-white text-indigo-600 shadow-xs font-bold">추가 매수</button>
+          <button type="button" onclick="setTradeType('sell')" id="tradeTypeSell" class="py-2 rounded-lg text-slate-600">일부 매도</button>
+          <button type="button" onclick="setTradeType('dividend')" id="tradeTypeDividend" class="py-2 rounded-lg text-slate-600">배당금 수령</button>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">거래일</label>
+          <input type="date" id="tradeDateInput" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3" id="tradeQtyPriceBox">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1" id="tradeQtyLabel">수량</label>
+            <input type="number" id="tradeQtyInput" step="any" min="0" placeholder="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1" id="tradePriceLabel">단가 (금액)</label>
+            <input type="number" id="tradePriceInput" step="any" min="0" placeholder="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800">
+          </div>
+        </div>
+
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+          <label class="flex items-center gap-2 text-xs font-bold text-slate-800">
+            <input type="checkbox" id="tradeSyncLedger" checked class="rounded text-indigo-600">
+            <span>통장에 입출금 자동 반영</span>
+          </label>
+          <select id="tradeAccountSelect" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800"></select>
+        </div>
+
+        <button type="submit" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-base shadow-lg shadow-indigo-100 transition">
+          기록 저장
+        </button>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ================= MODAL: ADD / EDIT ACCOUNT ================= -->
+  <div id="accountModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-slate-900" id="accountModalTitle">새 통장 / 지갑 추가</h3>
+        <button onclick="closeModal('accountModal')" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+      </div>
+
+      <form id="accountForm" onsubmit="handleAccountSubmit(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">통장 / 지갑 이름</label>
+          <input type="text" id="accNameInput" placeholder="예: 생활비 통장, 비상금 통장, 주식 예수금" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">종류</label>
+          <select id="accTypeInput" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800">
+            <option value="bank">은행 통장</option>
+            <option value="cash">현금 지갑</option>
+            <option value="card">체크/신용카드</option>
+            <option value="investment">증권사 / 투자 예수금</option>
+            <option value="crypto">코인 거래소 원화 잔고 (업비트 등)</option>
+          </select>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs font-bold text-slate-700">시작 초기 잔액 (원)</label>
+            <span class="text-[11px] text-indigo-600 font-bold">기존에 있던 돈</span>
+          </div>
+          <input type="number" id="accBalanceInput" value="0" step="any" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-base font-black text-slate-900">
+          <p class="text-[11px] text-slate-400 mt-1 leading-normal">
+            💡 가계부 쓰기 전 이미 들어있던 통장 잔액이나 주식 예수금을 적어주세요. (수입/지출 내역과 합산되어 최종 실시간 잔액이 계산됩니다)
+          </p>
+        </div>
+
+        <div id="accCurrentBalanceBox" class="hidden p-3 bg-slate-50 rounded-xl border border-slate-200 flex justify-between items-center text-xs">
+          <span class="text-slate-500 font-medium">현재 실시간 최종 잔액:</span>
+          <span class="font-black text-slate-900 text-sm" id="accCurrentBalancePreview">0원</span>
+        </div>
+
+        <div class="flex gap-2 pt-1">
+          <button type="button" id="accModalDeleteBtn" onclick="deleteCurrentEditingAccount()" class="hidden py-3 px-4 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl font-bold text-xs transition active:scale-95">
+            <i class="fa-regular fa-trash-can mr-1"></i> 삭제
+          </button>
+          <button type="submit" id="accSubmitBtn" class="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-base shadow-lg shadow-indigo-100 transition active:scale-98">
+            계좌 추가
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-16 sm:bottom-6 right-6 bg-slate-900 text-white px-5 py-3 rounded-2xl text-sm font-bold shadow-2xl flex items-center gap-2 transform translate-y-20 opacity-0 transition-all duration-300 z-50">
+    <i class="fa-solid fa-circle-check text-emerald-400"></i>
+    <span id="toastMsg">알림</span>
+  </div>
+
+  <!-- Main JavaScript -->
+  <script src="/static/app.js"></script>
+</body>
+</html>
