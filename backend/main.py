@@ -23,6 +23,7 @@ app.add_middleware(
 )
 
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
+APP_PROFILE = os.environ.get("APP_PROFILE", "").strip().lower()
 
 @app.on_event("startup")
 def on_startup():
@@ -100,13 +101,23 @@ class ProfileUpdate(BaseModel):
     default_mode: Optional[str] = None
     font_size: Optional[str] = None
 
-# ----------------- Profiles (가족 멀티프로필) -----------------
+# ----------------- Configuration & Profiles -----------------
+
+@app.get("/api/config")
+def get_config():
+    """배포 환경 설정 정보 반환 (독립 사이트 모드 여부 등)"""
+    return {
+        "app_profile": APP_PROFILE if APP_PROFILE in ["mom", "me"] else None
+    }
 
 @app.get("/api/profiles")
 def get_profiles():
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM profiles ORDER BY id DESC")
+    if APP_PROFILE in ["mom", "me"]:
+        cursor.execute("SELECT * FROM profiles WHERE id = ?", (APP_PROFILE,))
+    else:
+        cursor.execute("SELECT * FROM profiles ORDER BY id DESC")
     rows = cursor.fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -139,6 +150,9 @@ def update_profile(profile_id: str, p: ProfileUpdate):
 @app.get("/api/summary")
 def get_summary(profile_id: str = "mom", month: Optional[str] = None):
     """프로필별 수입, 지출, 잔액, 투자 및 순자산 요약 정보"""
+    if APP_PROFILE in ["mom", "me"]:
+        profile_id = APP_PROFILE
+
     if not month:
         month = datetime.now().strftime("%Y-%m")
     today_str = datetime.now().strftime("%Y-%m-%d")
@@ -263,6 +277,9 @@ def list_transactions(
     search: Optional[str] = None,
     limit: int = 200
 ):
+    if APP_PROFILE in ["mom", "me"]:
+        profile_id = APP_PROFILE
+
     conn = get_db()
     cursor = conn.cursor()
 
@@ -307,7 +324,7 @@ def create_transaction(tx: TransactionCreate):
     conn = get_db()
     cursor = conn.cursor()
 
-    p_id = tx.profile_id or "mom"
+    p_id = APP_PROFILE if APP_PROFILE in ["mom", "me"] else (tx.profile_id or "mom")
     cursor.execute("""
         INSERT INTO transactions (profile_id, date, type, amount, category, account_id, to_account_id, memo)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -394,6 +411,9 @@ def delete_transaction(tx_id: int):
 
 @app.get("/api/calendar")
 def get_calendar_data(profile_id: str = "mom", month: str = "2026-09"):
+    if APP_PROFILE in ["mom", "me"]:
+        profile_id = APP_PROFILE
+
     conn = get_db()
     cursor = conn.cursor()
 
@@ -423,6 +443,9 @@ def get_calendar_data(profile_id: str = "mom", month: str = "2026-09"):
 
 @app.get("/api/budgets")
 def get_budgets(profile_id: str = "mom", month: str = "2026-09"):
+    if APP_PROFILE in ["mom", "me"]:
+        profile_id = APP_PROFILE
+
     conn = get_db()
     cursor = conn.cursor()
 
@@ -480,7 +503,7 @@ def get_budgets(profile_id: str = "mom", month: str = "2026-09"):
 def set_budget(item: BudgetSet):
     conn = get_db()
     cursor = conn.cursor()
-    p_id = item.profile_id or "mom"
+    p_id = APP_PROFILE if APP_PROFILE in ["mom", "me"] else (item.profile_id or "mom")
     cursor.execute("""
         INSERT OR REPLACE INTO budgets (profile_id, month, category, amount)
         VALUES (?, ?, ?, ?)
@@ -493,6 +516,9 @@ def set_budget(item: BudgetSet):
 
 @app.get("/api/accounts")
 def get_accounts(profile_id: str = "mom"):
+    if APP_PROFILE in ["mom", "me"]:
+        profile_id = APP_PROFILE
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM accounts WHERE profile_id = ? ORDER BY is_investment ASC, id ASC", (profile_id,))
@@ -504,7 +530,7 @@ def get_accounts(profile_id: str = "mom"):
 def create_account(acc: AccountCreate):
     conn = get_db()
     cursor = conn.cursor()
-    p_id = acc.profile_id or "mom"
+    p_id = APP_PROFILE if APP_PROFILE in ["mom", "me"] else (acc.profile_id or "mom")
     init_bal = acc.initial_balance if acc.initial_balance is not None else (acc.balance or 0.0)
     cursor.execute("""
         INSERT INTO accounts (profile_id, name, type, balance, initial_balance, color, is_investment)
@@ -576,6 +602,9 @@ def get_categories():
 
 @app.get("/api/investments")
 def get_investments(profile_id: str = "me"):
+    if APP_PROFILE in ["mom", "me"]:
+        profile_id = APP_PROFILE
+
     usd_rate = get_usd_krw_rate()
     conn = get_db()
     cursor = conn.cursor()
@@ -654,7 +683,7 @@ def get_investments(profile_id: str = "me"):
 def add_investment(inv: InvestmentCreate):
     conn = get_db()
     cursor = conn.cursor()
-    p_id = inv.profile_id or "me"
+    p_id = APP_PROFILE if APP_PROFILE in ["mom", "me"] else (inv.profile_id or "me")
 
     cur_price = inv.current_price
     if cur_price is None or cur_price <= 0:
@@ -793,7 +822,11 @@ def get_settings():
     cursor.execute("SELECT key, value FROM settings")
     rows = cursor.fetchall()
     conn.close()
-    return {r['key']: r['value'] for r in rows}
+    res = {r['key']: r['value'] for r in rows}
+    env_key = os.environ.get("GEMINI_API_KEY")
+    if env_key and not res.get("gemini_api_key"):
+        res["gemini_api_key"] = env_key
+    return res
 
 @app.post("/api/settings")
 def update_settings(payload: Dict[str, str]):
