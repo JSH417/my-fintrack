@@ -8,30 +8,43 @@ let investmentsData = null;
 let allocationChartInstance = null;
 let currentModalType = 'expense';
 let selectedCalDate = null;
+let isSiteLocked = false;
 
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', async () => {
+  // Check server configuration (APP_PROFILE set in Render / environment)
+  let serverAppProfile = null;
+  try {
+    const cfgRes = await fetch('/api/config');
+    if (cfgRes.ok) {
+      const cfg = await cfgRes.json();
+      if (cfg && (cfg.app_profile === 'mom' || cfg.app_profile === 'me')) {
+        serverAppProfile = cfg.app_profile;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to load /api/config', e);
+  }
+
   const urlParams = new URLSearchParams(window.location.search);
   const pParam = urlParams.get('profile') || urlParams.get('user');
   const lockParam = urlParams.get('lock') || urlParams.get('only');
 
-  if (pParam === 'me' || pParam === 'mom') {
+  if (serverAppProfile) {
+    // Dedicated standalone site deployment (via Render APP_PROFILE environment variable)
+    currentProfile = serverAppProfile;
+    isSiteLocked = true;
+  } else if (pParam === 'me' || pParam === 'mom') {
     currentProfile = pParam;
+    isSiteLocked = (lockParam === 'true' || lockParam === 'mom' || urlParams.get('user') === 'mom');
   } else {
     const saved = localStorage.getItem('fintrack_active_profile');
     if (saved === 'me' || saved === 'mom') currentProfile = saved;
-  }
-
-  // Standalone mode check (어머니 폰에서는 내 가계부 전환 버튼을 아예 숨김)
-  const isLocked = lockParam === 'true' || lockParam === 'mom' || urlParams.get('user') === 'mom';
-  if (isLocked) {
-    currentProfile = 'mom';
-    document.getElementById('profileSwitcherBox').classList.add('hidden');
-    document.getElementById('standaloneTitleBox').classList.remove('hidden');
+    isSiteLocked = (lockParam === 'true');
   }
 
   setupEventListeners();
-  await switchProfile(currentProfile, false, isLocked);
+  await switchProfile(currentProfile, false, isSiteLocked);
   await loadCategories();
   loadSettings();
 });
@@ -68,19 +81,31 @@ function setupEventListeners() {
 // ----------------- Multi-Profile Switching -----------------
 
 async function switchProfile(profileId, showMessage = true, isLocked = false) {
-  currentProfile = profileId;
-  localStorage.setItem('fintrack_active_profile', profileId);
+  if (isSiteLocked) {
+    profileId = currentProfile;
+    isLocked = true;
+  } else {
+    currentProfile = profileId;
+    localStorage.setItem('fintrack_active_profile', profileId);
 
-  // Update URL without reload for bookmarking
-  const newUrl = new URL(window.location);
-  newUrl.searchParams.set('profile', profileId);
-  window.history.replaceState({}, '', newUrl);
+    // Update URL without reload for bookmarking
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.set('profile', profileId);
+    window.history.replaceState({}, '', newUrl);
+  }
 
   const switcher = document.getElementById('profileSwitcherBox');
   const standaloneTitle = document.getElementById('standaloneTitleBox');
+  const standaloneIcon = document.getElementById('standaloneIcon');
+  const standaloneHeader = document.getElementById('standaloneTitle');
+  const settingDataReset = document.getElementById('settingDataResetBox');
+
   if (isLocked) {
     if (switcher) switcher.classList.add('hidden');
     if (standaloneTitle) standaloneTitle.classList.remove('hidden');
+  } else {
+    if (switcher) switcher.classList.remove('hidden');
+    if (standaloneTitle) standaloneTitle.classList.add('hidden');
   }
 
   const btnMom = document.getElementById('profileBtnMom');
@@ -98,44 +123,66 @@ async function switchProfile(profileId, showMessage = true, isLocked = false) {
 
   if (profileId === 'mom') {
     // Mother's Profile UI
-    btnMom.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition bg-white text-emerald-700 shadow-xs font-black";
-    btnMe.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition text-slate-600 hover:text-slate-900 font-bold";
+    if (standaloneIcon) standaloneIcon.textContent = "🌸";
+    if (standaloneHeader) standaloneHeader.textContent = "어머니 행복 가계부";
+    document.title = "어머니 행복 가계부 🌸";
 
-    bannerBox.className = "bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs";
-    bannerIcon.textContent = "🌸";
-    bannerIcon.className = "w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 text-lg shadow-xs";
-    bannerTitle.textContent = "어머니 전용 간편 가계부입니다";
-    bannerTitle.className = "text-base font-bold text-emerald-900";
-    bannerDesc.textContent = "복잡한 주식/투자 없이 오늘 쓴 돈과 남은 예산을 편하게 확인하세요.";
-    bannerDesc.className = "text-xs text-emerald-700";
-    badgeText.textContent = "어머니 독립 장부";
+    if (btnMom) btnMom.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition bg-white text-emerald-700 shadow-xs font-black";
+    if (btnMe) btnMe.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition text-slate-600 hover:text-slate-900 font-bold";
 
-    investTab.classList.add('hidden');
+    if (bannerBox) bannerBox.className = "bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs";
+    if (bannerIcon) {
+      bannerIcon.textContent = "🌸";
+      bannerIcon.className = "w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 text-lg shadow-xs";
+    }
+    if (bannerTitle) {
+      bannerTitle.textContent = "어머니 전용 간편 가계부입니다";
+      bannerTitle.className = "text-base font-bold text-emerald-900";
+    }
+    if (bannerDesc) {
+      bannerDesc.textContent = "복잡한 주식/투자 없이 오늘 쓴 돈과 남은 예산을 편하게 확인하세요.";
+      bannerDesc.className = "text-xs text-emerald-700";
+    }
+    if (badgeText) badgeText.textContent = "어머니 독립 장부";
+
+    if (investTab) investTab.classList.add('hidden');
     if (mobileInvestTab) mobileInvestTab.classList.add('hidden');
-    netWorthCard.classList.add('hidden');
-    dashInvestBox.classList.add('hidden');
+    if (netWorthCard) netWorthCard.classList.add('hidden');
+    if (dashInvestBox) dashInvestBox.classList.add('hidden');
+    if (settingDataReset) settingDataReset.classList.add('hidden');
 
     setFontSize('large'); // Senior-friendly large text
     if (showMessage) showToast("🌸 어머니 가계부로 전환되었습니다.");
 
   } else {
     // My Profile UI (With Investments & Net worth)
-    btnMe.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition bg-white text-indigo-700 shadow-xs font-black";
-    btnMom.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition text-slate-600 hover:text-slate-900 font-bold";
+    if (standaloneIcon) standaloneIcon.textContent = "💼";
+    if (standaloneHeader) standaloneHeader.textContent = "내 스마트 가계부 & 자산관리";
+    document.title = "내 가계부 & 자산관리 💼";
 
-    bannerBox.className = "bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs";
-    bannerIcon.textContent = "👤";
-    bannerIcon.className = "w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 text-lg shadow-xs";
-    bannerTitle.textContent = "내 스마트 가계부 & 투자 포트폴리오";
-    bannerTitle.className = "text-base font-bold text-indigo-950";
-    bannerDesc.textContent = "주식, 가상자산 시세 및 총 순자산(Net Worth)이 연동되는 통합 장부입니다.";
-    bannerDesc.className = "text-xs text-indigo-700";
-    badgeText.textContent = "내 전용 통합 장부";
+    if (btnMe) btnMe.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition bg-white text-indigo-700 shadow-xs font-black";
+    if (btnMom) btnMom.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition text-slate-600 hover:text-slate-900 font-bold";
 
-    investTab.classList.remove('hidden');
+    if (bannerBox) bannerBox.className = "bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs";
+    if (bannerIcon) {
+      bannerIcon.textContent = "👤";
+      bannerIcon.className = "w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 text-lg shadow-xs";
+    }
+    if (bannerTitle) {
+      bannerTitle.textContent = "내 스마트 가계부 & 투자 포트폴리오";
+      bannerTitle.className = "text-base font-bold text-indigo-950";
+    }
+    if (bannerDesc) {
+      bannerDesc.textContent = "주식, 가상자산 시세 및 총 순자산(Net Worth)이 연동되는 통합 장부입니다.";
+      bannerDesc.className = "text-xs text-indigo-700";
+    }
+    if (badgeText) badgeText.textContent = "내 전용 통합 장부";
+
+    if (investTab) investTab.classList.remove('hidden');
     if (mobileInvestTab) mobileInvestTab.classList.remove('hidden');
-    netWorthCard.classList.remove('hidden');
-    dashInvestBox.classList.remove('hidden');
+    if (netWorthCard) netWorthCard.classList.remove('hidden');
+    if (dashInvestBox) dashInvestBox.classList.remove('hidden');
+    if (settingDataReset) settingDataReset.classList.remove('hidden');
 
     setFontSize('normal');
     if (showMessage) showToast("👤 내 가계부(투자 연동)로 전환되었습니다.");
@@ -1430,9 +1477,10 @@ async function saveGeminiApiKey() {
     if (res.ok) {
       showToast("Gemini API 키가 안전하게 저장되었습니다! ✨");
     } else {
-      alert("API 키 저장에 실패했습니다.");
+      const errText = await res.text();
+      alert("API 키 저장에 실패했습니다. (서버 응답: " + errText.slice(0, 100) + ")");
     }
   } catch (err) {
-    alert("저장 오류: " + err.message);
+    alert("저장 통신 오류: " + err.message);
   }
 }
