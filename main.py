@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
@@ -729,8 +729,13 @@ def delete_investment(inv_id: int):
 
 @app.post("/api/investments/refresh-prices")
 def refresh_prices():
-    res = update_all_investments()
-    return res
+    try:
+        res = update_all_investments()
+        return res
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "message": f"시세 갱신 중 오류: {str(e)}", "usd_krw_rate": get_usd_krw_rate()}
 
 @app.post("/api/investments/trade")
 def record_trade(trade: InvestmentTrade):
@@ -860,5 +865,37 @@ if os.path.exists(FRONTEND_DIR):
 def serve_index():
     index_file = os.path.join(FRONTEND_DIR, "index.html")
     if os.path.exists(index_file):
-        return FileResponse(index_file)
+        with open(index_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        import time
+        v_tag = f"?v={int(time.time())}"
+        content = content.replace("/static/app.js", f"/static/app.js{v_tag}")
+        content = content.replace("/static/style.css", f"/static/style.css{v_tag}")
+
+        if APP_PROFILE in ["mom", "me"]:
+            inject_script = f"""
+            <script>
+                window.SERVER_APP_PROFILE = '{APP_PROFILE}';
+            </script>
+            """
+            content = content.replace("</head>", f"{inject_script}\n</head>")
+
+            # Server-side HTML transformation: remove switcher and display standalone title directly
+            content = content.replace('id="profileSwitcherBox" class="flex', 'id="profileSwitcherBox" class="hidden')
+            content = content.replace('id="standaloneTitleBox" class="hidden flex', 'id="standaloneTitleBox" class="flex')
+
+            if APP_PROFILE == "mom":
+                content = content.replace('<title>행복 가계부 & 자산관리</title>', '<title>어머니 행복 가계부 🌸</title>')
+                content = content.replace('<h1 id="standaloneTitle" class="text-base sm:text-lg font-black text-slate-900">어머니 행복 가계부</h1>', '<h1 id="standaloneTitle" class="text-base sm:text-lg font-black text-slate-900">어머니 행복 가계부 🌸</h1>')
+            elif APP_PROFILE == "me":
+                content = content.replace('<title>행복 가계부 & 자산관리</title>', '<title>내 가계부 & 자산관리 💼</title>')
+                content = content.replace('<span id="standaloneIcon" class="text-2xl">🌸</span>', '<span id="standaloneIcon" class="text-2xl">💼</span>')
+                content = content.replace('<h1 id="standaloneTitle" class="text-base sm:text-lg font-black text-slate-900">어머니 행복 가계부</h1>', '<h1 id="standaloneTitle" class="text-base sm:text-lg font-black text-slate-900">내 스마트 가계부 & 자산관리 💼</h1>')
+
+        return HTMLResponse(content, headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        })
     return JSONResponse({"message": "FinTrack API is running. Frontend index.html not found."})
