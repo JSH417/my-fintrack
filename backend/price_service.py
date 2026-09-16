@@ -53,6 +53,26 @@ def fetch_crypto_price_upbit(symbol: str) -> Optional[float]:
         print(f"업비트 시세 조회 실패 ({symbol}): {e}")
     return None
 
+def fetch_stock_price_naver(symbol: str) -> Optional[float]:
+    """네이버 증권 모바일 API를 통한 국내 주식 시세 조회 (한국 종목에 가장 빠르고 안정적)"""
+    m = re.search(r"\d{6}", symbol)
+    if not m:
+        return None
+    code = m.group(0)
+    try:
+        url = f"https://m.stock.naver.com/api/stock/{code}/basic"
+        res = requests.get(url, headers=HEADERS, timeout=4)
+        if res.status_code == 200:
+            data = res.json()
+            close_price_str = data.get('closePrice')
+            if close_price_str:
+                price = float(str(close_price_str).replace(',', '').strip())
+                if price > 0:
+                    return price
+    except Exception as e:
+        print(f"네이버 시세 조회 실패 ({code}): {e}")
+    return None
+
 def fetch_stock_price_yahoo(symbol: str) -> Optional[float]:
     """Yahoo Finance를 통한 주식/ETF 시세 조회 (국내/해외)"""
     clean_sym = symbol.strip().upper()
@@ -90,12 +110,18 @@ def fetch_live_price(symbol: str, category: str = "kr_stock") -> Optional[float]
         if price:
             return price
 
-    # 2. 주식 / ETF 인 경우
+    # 2. 한국 주식 (6자리 숫자)인 경우 네이버 증권 우선 시도
+    if category == "kr_stock" or re.search(r"^\d{6}$", symbol.strip()):
+        price = fetch_stock_price_naver(symbol)
+        if price:
+            return price
+
+    # 3. 해외 주식 / ETF / 또는 네이버 실패 시 Yahoo Finance 시도
     price = fetch_stock_price_yahoo(symbol)
     if price:
         return price
 
-    # 3. 혹시나 암호화폐 티커인데 일반 주식으로 입력했을 경우를 대비해 업비트 추가 시도
+    # 4. 혹시나 암호화폐 티커인데 일반 주식으로 입력했을 경우를 대비해 업비트 추가 시도
     crypto_price = fetch_crypto_price_upbit(symbol)
     if crypto_price:
         return crypto_price
@@ -108,8 +134,13 @@ def update_all_investments() -> Dict[str, Any]:
     conn = get_db()
     cursor = conn.cursor()
 
-    # 최신 환율 설정 저장
-    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('usd_krw_rate', ?)", (str(usd_rate),))
+    # 최신 환율 설정 저장 (PostgreSQL & SQLite 완벽 호환)
+    try:
+        cursor.execute("DELETE FROM settings WHERE key = 'usd_krw_rate'")
+        cursor.execute("INSERT INTO settings (key, value) VALUES ('usd_krw_rate', ?)", (str(usd_rate),))
+        conn.commit()
+    except Exception as e:
+        print(f"환율 설정 저장 중 예외 (계속 진행): {e}")
 
     cursor.execute("SELECT id, symbol, category, current_price, currency FROM investments")
     investments = cursor.fetchall()
@@ -127,16 +158,19 @@ def update_all_investments() -> Dict[str, Any]:
         if cat in ('savings', 'fund', 'etc'):
             continue
 
-        new_price = fetch_live_price(sym, cat)
-        if new_price and new_price > 0:
-            cursor.execute("UPDATE investments SET current_price = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (new_price, inv_id))
-            updated_count += 1
-            results.append({
-                "id": inv_id,
-                "symbol": sym,
-                "old_price": old_price,
-                "new_price": new_price
-            })
+        try:
+            new_price = fetch_live_price(sym, cat)
+            if new_price and new_price > 0:
+                cursor.execute("UPDATE investments SET current_price = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (new_price, inv_id))
+                updated_count += 1
+                results.append({
+                    "id": inv_id,
+                    "symbol": sym,
+                    "old_price": old_price,
+                    "new_price": new_price
+                })
+        except Exception as e:
+            print(f"종목 {sym} 시세 갱신 중 예외 발생: {e}")
 
     conn.commit()
     conn.close()

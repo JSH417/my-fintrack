@@ -729,8 +729,13 @@ def delete_investment(inv_id: int):
 
 @app.post("/api/investments/refresh-prices")
 def refresh_prices():
-    res = update_all_investments()
-    return res
+    try:
+        res = update_all_investments()
+        return res
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "message": f"시세 갱신 중 오류: {str(e)}", "usd_krw_rate": get_usd_krw_rate()}
 
 @app.post("/api/investments/trade")
 def record_trade(trade: InvestmentTrade):

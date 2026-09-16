@@ -30,14 +30,21 @@ class DBCursorWrapper:
                     ON CONFLICT (profile_id, month, category) DO UPDATE SET amount = EXCLUDED.amount
                 """
             elif "INSERT OR REPLACE INTO settings" in pg_sql:
-                pg_sql = """
-                    INSERT INTO settings (key, value)
-                    VALUES (%s, %s)
-                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-                """
+                if params is not None and len(params) == 1:
+                    pg_sql = """
+                        INSERT INTO settings (key, value)
+                        VALUES ('usd_krw_rate', %s)
+                        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+                    """
+                else:
+                    pg_sql = """
+                        INSERT INTO settings (key, value)
+                        VALUES (%s, %s)
+                        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+                    """
 
             is_insert = pg_sql.strip().upper().startswith("INSERT INTO")
-            if is_insert and "RETURNING" not in pg_sql.upper() and "ON CONFLICT" not in pg_sql.upper():
+            if is_insert and "RETURNING" not in pg_sql.upper() and "ON CONFLICT" not in pg_sql.upper() and "INTO SETTINGS" not in pg_sql.upper():
                 pg_sql += " RETURNING id"
                 if params is not None:
                     self.cursor.execute(pg_sql, params)
