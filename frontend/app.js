@@ -790,12 +790,23 @@ async function handleRefreshPrices() {
   showToast("최신 시세 및 환율을 조회하고 있습니다...");
   try {
     const res = await fetch('/api/investments/refresh-prices', { method: 'POST' });
+    if (!res.ok) {
+      const errTxt = await res.text();
+      console.error("Refresh prices HTTP error:", errTxt);
+      showToast("시세 갱신 중 서버 오류가 발생했습니다.");
+      return;
+    }
     const data = await res.json();
+    if (data.success === false) {
+      showToast(data.message || "시세 갱신 중 오류가 발생했습니다.");
+      return;
+    }
     showToast(`시세가 갱신되었습니다. (환율: ${data.usd_krw_rate}원)`);
     loadInvestments();
     loadDashboard();
   } catch (err) {
-    showToast("시세 갱신 중 오류가 발생했습니다.");
+    console.error("Refresh prices network error:", err);
+    showToast("시세 갱신 중 통신 오류가 발생했습니다.");
   }
 }
 
