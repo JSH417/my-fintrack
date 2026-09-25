@@ -262,6 +262,8 @@ def init_db():
             """)
 
         cursor.execute("INSERT INTO settings (key, value) VALUES ('usd_krw_rate', '1350.0') ON CONFLICT (key) DO NOTHING")
+        cursor.execute("INSERT INTO settings (key, value) VALUES ('app_pin', '0000') ON CONFLICT (key) DO NOTHING")
+        cursor.execute("INSERT INTO settings (key, value) VALUES ('app_pin_enabled', '0') ON CONFLICT (key) DO NOTHING")
 
     else:
         cursor.execute("""
@@ -394,6 +396,8 @@ def init_db():
             cursor.executemany("INSERT INTO categories (name, type, icon, color) VALUES (?, ?, ?, ?)", default_categories)
 
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('usd_krw_rate', '1350.0')")
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('app_pin', '0000')")
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('app_pin_enabled', '0')")
         conn.commit()
 
     cursor.close()

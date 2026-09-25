@@ -101,6 +101,17 @@ class ProfileUpdate(BaseModel):
     default_mode: Optional[str] = None
     font_size: Optional[str] = None
 
+class PinVerify(BaseModel):
+    pin: str
+
+class PinChange(BaseModel):
+    current_pin: str
+    new_pin: str
+
+class PinToggle(BaseModel):
+    enabled: bool
+    pin: Optional[str] = None
+
 # ----------------- Configuration & Profiles -----------------
 
 @app.get("/api/config")
@@ -843,6 +854,83 @@ def update_settings(payload: Dict[str, str]):
     conn.commit()
     conn.close()
     return {"success": True}
+
+# ----------------- PIN Security & App Lock -----------------
+
+@app.get("/api/pin/status")
+def get_pin_status():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM settings WHERE key = 'app_pin_enabled'")
+    row = cursor.fetchone()
+    enabled = False
+    if row:
+        val = row['value'] if isinstance(row, dict) else row[0]
+        enabled = (str(val) == "1" or str(val).lower() == "true")
+    conn.close()
+    return {"enabled": enabled, "has_pin": True}
+
+@app.post("/api/pin/verify")
+def verify_pin(payload: PinVerify):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM settings WHERE key = 'app_pin'")
+    row = cursor.fetchone()
+    conn.close()
+    stored_pin = "0000"
+    if row:
+        stored_pin = row['value'] if isinstance(row, dict) else row[0]
+
+    if payload.pin.strip() == stored_pin:
+        return {"valid": True}
+    return JSONResponse(status_code=400, content={"valid": False, "message": "비밀번호가 올바르지 않습니다."})
+
+@app.post("/api/pin/change")
+def change_pin(payload: PinChange):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM settings WHERE key = 'app_pin'")
+    row = cursor.fetchone()
+    stored_pin = "0000"
+    if row:
+        stored_pin = row['value'] if isinstance(row, dict) else row[0]
+
+    if payload.current_pin.strip() != stored_pin:
+        conn.close()
+        raise HTTPException(status_code=400, detail="현재 비밀번호가 올바르지 않습니다. (초기 비밀번호: 0000)")
+
+    new_pin = payload.new_pin.strip()
+    if len(new_pin) != 4 or not new_pin.isdigit():
+        conn.close()
+        raise HTTPException(status_code=400, detail="새 비밀번호는 4자리 숫자여야 합니다.")
+
+    cursor.execute("DELETE FROM settings WHERE key = 'app_pin'")
+    cursor.execute("INSERT INTO settings (key, value) VALUES ('app_pin', ?)", (new_pin,))
+    conn.commit()
+    conn.close()
+    return {"success": True, "message": "비밀번호가 성공적으로 변경되었습니다."}
+
+@app.post("/api/pin/toggle")
+def toggle_pin(payload: PinToggle):
+    conn = get_db()
+    cursor = conn.cursor()
+
+    if payload.pin:
+        cursor.execute("SELECT value FROM settings WHERE key = 'app_pin'")
+        row = cursor.fetchone()
+        stored_pin = "0000"
+        if row:
+            stored_pin = row['value'] if isinstance(row, dict) else row[0]
+        if payload.pin.strip() != stored_pin:
+            conn.close()
+            raise HTTPException(status_code=400, detail="비밀번호가 올바르지 않습니다. (초기 비밀번호: 0000)")
+
+    new_val = "1" if payload.enabled else "0"
+    cursor.execute("DELETE FROM settings WHERE key = 'app_pin_enabled'")
+    cursor.execute("INSERT INTO settings (key, value) VALUES ('app_pin_enabled', ?)", (new_val,))
+    conn.commit()
+    conn.close()
+    return {"success": True, "enabled": payload.enabled}
 
 # ----------------- Data Reset & Sample -----------------
 
