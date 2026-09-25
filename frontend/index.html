@@ -267,6 +267,38 @@
         </div>
       </div>
 
+      <!-- Dashboard Accounts & Cards Overview (Requirement 2) -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-sm font-bold shadow-2xs">
+              <i class="fa-solid fa-credit-card"></i>
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="text-sm sm:text-base font-bold text-slate-900 leading-tight">내 통장 및 카드 잔액</h3>
+                <span class="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold" id="dashAccountsCount">0개</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-0.5 hidden xs:block">카드를 누르면 잔액과 정보를 즉시 수정할 수 있습니다.</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5 sm:gap-2">
+            <button type="button" onclick="openAddAccountModal()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-xs active:scale-95 cursor-pointer">
+              <i class="fa-solid fa-plus text-[10px]"></i>
+              <span class="hidden xs:inline">통장/카드 추가</span>
+              <span class="xs:inline sm:hidden">추가</span>
+            </button>
+            <button type="button" onclick="switchTab('tab-accounts')" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+              <span>전체관리</span>
+              <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            </button>
+          </div>
+        </div>
+        <div id="dashAccountsList" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+          <!-- Rendered dynamically via renderDashboardAccounts() in app.js -->
+        </div>
+      </div>
+
       <!-- Two Column Layout: Budget Progress & Recent Transactions -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         <!-- Left 2 Cols: Recent Transactions -->
@@ -640,6 +672,10 @@
       <i class="fa-regular fa-calendar-days text-lg"></i>
       <span class="text-[10px] font-bold mt-0.5">달력</span>
     </button>
+    <button onclick="switchTab('tab-accounts')" class="mobile-nav-btn flex flex-col items-center text-slate-400 py-1" data-tab="tab-accounts">
+      <i class="fa-solid fa-credit-card text-lg"></i>
+      <span class="text-[10px] font-bold mt-0.5">통장/카드</span>
+    </button>
     <button onclick="switchTab('tab-investments')" id="mobileInvestNavBtn" class="mobile-nav-btn hidden flex flex-col items-center text-slate-400 py-1" data-tab="tab-investments">
       <i class="fa-solid fa-arrow-trend-up text-lg text-indigo-500"></i>
       <span class="text-[10px] font-bold mt-0.5">투자</span>
@@ -714,11 +750,23 @@
 
         <div class="grid grid-cols-2 gap-3" id="txAccountField">
           <div>
-            <label class="block text-xs font-bold text-slate-600 mb-1" id="txFromAccountLabel">결제 통장</label>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-xs font-bold text-slate-600" id="txFromAccountLabel">결제 통장 / 카드</label>
+              <button type="button" onclick="openAddAccountFromTxModal()" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 cursor-pointer" title="새로운 통장 또는 카드 등록">
+                <i class="fa-solid fa-plus text-[9px]"></i>
+                <span>새 카드/통장</span>
+              </button>
+            </div>
             <select id="txAccountInput" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800"></select>
           </div>
           <div id="txToAccountBox" class="hidden">
-            <label class="block text-xs font-bold text-slate-600 mb-1">받는 계좌</label>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-xs font-bold text-slate-600">받는 계좌</label>
+              <button type="button" onclick="openAddAccountFromTxModal()" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 cursor-pointer">
+                <i class="fa-solid fa-plus text-[9px]"></i>
+                <span>추가</span>
+              </button>
+            </div>
             <select id="txToAccountInput" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800"></select>
           </div>
         </div>
@@ -866,25 +914,25 @@
 
 
   <!-- ================= MODAL: ADD / EDIT ACCOUNT ================= -->
-  <div id="accountModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
+  <div id="accountModal" class="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 hidden backdrop-blur-xs">
     <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
       <div class="flex items-center justify-between">
-        <h3 class="text-lg font-bold text-slate-900" id="accountModalTitle">새 통장 / 지갑 추가</h3>
-        <button onclick="closeModal('accountModal')" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+        <h3 class="text-lg font-bold text-slate-900" id="accountModalTitle">새 통장 / 카드 추가</h3>
+        <button type="button" onclick="closeModal('accountModal')" class="text-slate-400 hover:text-slate-600 text-xl font-bold cursor-pointer">&times;</button>
       </div>
 
       <form id="accountForm" onsubmit="handleAccountSubmit(event)" class="space-y-3.5">
         <div>
-          <label class="block text-xs font-bold text-slate-600 mb-1">통장 / 지갑 이름</label>
-          <input type="text" id="accNameInput" placeholder="예: 생활비 통장, 비상금 통장, 주식 예수금" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800">
+          <label class="block text-xs font-bold text-slate-600 mb-1">통장 / 카드 이름</label>
+          <input type="text" id="accNameInput" placeholder="예: 현대카드, 국민은행, 생활비 통장, 비상금 지갑" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800">
         </div>
 
         <div>
           <label class="block text-xs font-bold text-slate-600 mb-1">종류</label>
           <select id="accTypeInput" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800">
             <option value="bank">은행 통장</option>
+            <option value="card">체크 / 신용카드</option>
             <option value="cash">현금 지갑</option>
-            <option value="card">체크/신용카드</option>
             <option value="investment">증권사 / 투자 예수금</option>
             <option value="crypto">코인 거래소 원화 잔고 (업비트 등)</option>
           </select>
@@ -897,7 +945,7 @@
           </div>
           <input type="number" id="accBalanceInput" value="0" step="any" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-base font-black text-slate-900">
           <p class="text-[11px] text-slate-400 mt-1 leading-normal">
-            💡 가계부 쓰기 전 이미 들어있던 통장 잔액이나 주식 예수금을 적어주세요. (수입/지출 내역과 합산되어 최종 실시간 잔액이 계산됩니다)
+            💡 가계부 쓰기 전 들어있던 통장 잔액(또는 카드 사용 잔액)을 적어주세요. (카드는 -50,000처럼 음수도 가능합니다)
           </p>
         </div>
 

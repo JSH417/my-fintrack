@@ -869,10 +869,53 @@ async function loadAccounts() {
       }).join('');
     }
 
+    renderDashboardAccounts();
     populateAccountDropdowns();
   } catch (err) {
     console.error(err);
   }
+}
+
+function renderDashboardAccounts() {
+  const container = document.getElementById('dashAccountsList');
+  const countEl = document.getElementById('dashAccountsCount');
+  if (countEl) countEl.textContent = `${accountsList.length}개`;
+  if (!container) return;
+
+  if (accountsList.length === 0) {
+    container.innerHTML = `
+      <div class="col-span-full py-4 text-center text-xs text-slate-400">
+        등록된 통장이나 카드가 없습니다.
+        <button type="button" onclick="openAddAccountModal()" class="text-indigo-600 font-bold ml-1 hover:underline cursor-pointer">+ 첫 계좌/카드 등록하기</button>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = accountsList.map(acc => {
+    const isInvest = acc.is_investment === 1;
+    const typeIcon = isInvest ? 'fa-chart-pie text-purple-500' : (acc.type === 'card' ? 'fa-credit-card text-amber-500' : (acc.type === 'cash' ? 'fa-wallet text-emerald-500' : 'fa-building-columns text-blue-500'));
+    const isNegative = acc.balance < 0;
+    const balColor = isNegative ? 'text-rose-600' : 'text-slate-900';
+
+    return `
+      <div onclick="openEditAccountModal(${acc.id})" class="p-3 bg-slate-50 hover:bg-indigo-50/50 rounded-xl border border-slate-200/80 hover:border-indigo-300 transition cursor-pointer flex flex-col justify-between group active:scale-98 shadow-2xs">
+        <div class="flex items-center justify-between gap-1 mb-1.5">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="w-2 h-2 rounded-full flex-shrink-0" style="background-color: ${acc.color || '#3B82F6'}"></span>
+            <i class="fa-solid ${typeIcon} text-xs flex-shrink-0"></i>
+            <span class="font-bold text-xs text-slate-800 truncate" title="${acc.name}">${acc.name}</span>
+          </div>
+          <span class="text-slate-300 group-hover:text-indigo-600 text-[10px] flex-shrink-0 transition">
+            <i class="fa-solid fa-pen"></i>
+          </span>
+        </div>
+        <div class="text-sm sm:text-base font-black ${balColor} text-right">
+          ${formatCurrency(acc.balance)}
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function populateAccountDropdowns() {
@@ -881,10 +924,23 @@ function populateAccountDropdowns() {
   const investCashSel = document.getElementById('invCashAccountInput');
   const tradeAccSel = document.getElementById('tradeAccountSelect');
 
+  const prevFrom = fromSel ? fromSel.value : null;
+  const prevTo = toSel ? toSel.value : null;
+
   const options = accountsList.map(a => `<option value="${a.id}">${a.name} (${formatCurrency(a.balance)})</option>`).join('');
 
-  if (fromSel) fromSel.innerHTML = options;
-  if (toSel) toSel.innerHTML = options;
+  if (fromSel) {
+    fromSel.innerHTML = options;
+    if (prevFrom && accountsList.some(a => a.id == prevFrom)) {
+      fromSel.value = prevFrom;
+    }
+  }
+  if (toSel) {
+    toSel.innerHTML = options;
+    if (prevTo && accountsList.some(a => a.id == prevTo)) {
+      toSel.value = prevTo;
+    }
+  }
   if (investCashSel) investCashSel.innerHTML = `<option value="">연동 안 함 (자산만 등록)</option>` + options;
   if (tradeAccSel) tradeAccSel.innerHTML = options;
 }
@@ -951,7 +1007,10 @@ function openModal(type = 'expense') {
 function closeModal(id) {
   document.getElementById(id).classList.add('hidden');
   if (id === 'txModal') editingTxId = null;
-  if (id === 'accountModal') editingAccountId = null;
+  if (id === 'accountModal') {
+    editingAccountId = null;
+    openedAccountFromTxModal = false;
+  }
 }
 
 async function openEditTransactionById(txId) {
@@ -1242,9 +1301,11 @@ async function handleTradeSubmit(e) {
 
 // Add / Edit Account Modal
 let editingAccountId = null;
+let openedAccountFromTxModal = false;
 
 function openAddAccountModal() {
   editingAccountId = null;
+  openedAccountFromTxModal = false;
   document.getElementById('accountModal').classList.remove('hidden');
   document.getElementById('accountModalTitle').textContent = "새 통장 / 지갑 추가";
   document.getElementById('accSubmitBtn').textContent = "계좌 추가";
@@ -1256,11 +1317,26 @@ function openAddAccountModal() {
   setTimeout(() => document.getElementById('accNameInput').focus(), 100);
 }
 
+function openAddAccountFromTxModal() {
+  editingAccountId = null;
+  openedAccountFromTxModal = true;
+  document.getElementById('accountModal').classList.remove('hidden');
+  document.getElementById('accountModalTitle').textContent = "새 결제 수단 (카드/통장) 추가";
+  document.getElementById('accSubmitBtn').textContent = "추가하고 바로 선택";
+  document.getElementById('accModalDeleteBtn').classList.add('hidden');
+  document.getElementById('accCurrentBalanceBox').classList.add('hidden');
+  document.getElementById('accNameInput').value = '';
+  document.getElementById('accBalanceInput').value = '0';
+  document.getElementById('accTypeInput').value = 'card';
+  setTimeout(() => document.getElementById('accNameInput').focus(), 100);
+}
+
 function openEditAccountModal(accId) {
   const acc = accountsList.find(a => a.id === accId);
   if (!acc) return;
 
   editingAccountId = accId;
+  openedAccountFromTxModal = false;
   document.getElementById('accountModal').classList.remove('hidden');
   document.getElementById('accountModalTitle').textContent = `✏️ [${acc.name}] 잔액 및 정보 수정`;
   document.getElementById('accSubmitBtn').textContent = "수정 저장하기";
@@ -1305,6 +1381,7 @@ async function handleAccountSubmit(e) {
 
   try {
     let res;
+    let newAccId = null;
     if (editingAccountId) {
       res = await fetch(`/api/accounts/${editingAccountId}`, {
         method: 'PUT',
@@ -1328,16 +1405,32 @@ async function handleAccountSubmit(e) {
           is_investment: isInvest
         })
       });
+      if (res.ok) {
+        const data = await res.json();
+        newAccId = data.id;
+      }
     }
 
     if (res.ok) {
+      const wasFromTx = openedAccountFromTxModal;
       closeModal('accountModal');
-      showToast(editingAccountId ? "통장 잔액 및 정보가 수정되었습니다! ✨" : "새 통장이 추가되었습니다.");
+      showToast(editingAccountId ? "통장 잔액 및 정보가 수정되었습니다! ✨" : "새 통장/카드가 추가되었습니다. ✨");
       editingAccountId = null;
       await loadAccounts();
       loadDashboard();
+
+      if (wasFromTx && newAccId) {
+        const txAcc = document.getElementById('txAccountInput');
+        if (txAcc) {
+          txAcc.value = newAccId;
+        }
+        const txToAcc = document.getElementById('txToAccountInput');
+        if (currentModalType === 'transfer' && txToAcc && !txToAcc.value) {
+          txToAcc.value = newAccId;
+        }
+      }
     } else {
-      alert("통장 저장에 실패했습니다.");
+      alert("통장/카드 저장에 실패했습니다.");
     }
   } catch (err) {
     console.error(err);
