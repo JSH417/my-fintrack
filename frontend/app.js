@@ -49,6 +49,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await switchProfile(currentProfile, false, isSiteLocked);
   await loadCategories();
   loadSettings();
+  await initPinLock();
 });
 
 function setupEventListeners() {
@@ -1565,6 +1566,7 @@ async function loadSettings() {
   } catch (err) {
     console.error("설정 로드 실패:", err);
   }
+  loadPinSettings();
 }
 
 async function saveGeminiApiKey() {
@@ -1589,4 +1591,253 @@ async function saveGeminiApiKey() {
   } catch (err) {
     alert("저장 통신 오류: " + err.message);
   }
+}
+
+// ----------------- PIN Security & App Lock -----------------
+
+let isPinLockActive = false;
+let currentEnteredPin = '';
+
+async function initPinLock() {
+  try {
+    const res = await fetch('/api/pin/status');
+    if (res.ok) {
+      const data = await res.json();
+      isPinLockActive = !!data.enabled;
+      updatePinUI(isPinLockActive);
+
+      // Check if session is already unlocked
+      const isUnlocked = sessionStorage.getItem('fintrack_unlocked') === 'true';
+      if (isPinLockActive && !isUnlocked) {
+        showLockScreen();
+      }
+    }
+  } catch (err) {
+    console.error("PIN 상태 확인 실패:", err);
+  }
+}
+
+async function loadPinSettings() {
+  try {
+    const res = await fetch('/api/pin/status');
+    if (res.ok) {
+      const data = await res.json();
+      isPinLockActive = !!data.enabled;
+      updatePinUI(isPinLockActive);
+    }
+  } catch (err) {
+    console.error("PIN 설정 로드 실패:", err);
+  }
+}
+
+function updatePinUI(enabled) {
+  isPinLockActive = enabled;
+  const badge = document.getElementById('pinStatusBadge');
+  const btn = document.getElementById('pinToggleBtn');
+  const btnText = document.getElementById('pinToggleBtnText');
+  const btnIcon = document.getElementById('pinToggleIcon');
+  const lockNowBtn = document.getElementById('lockNowBtn');
+
+  if (enabled) {
+    if (badge) {
+      badge.textContent = "보안 잠금 사용 중 🔒";
+      badge.className = "text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-700 border border-emerald-200";
+    }
+    if (btn) {
+      btn.className = "px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer";
+    }
+    if (btnText) btnText.textContent = "잠금 켜짐 (끄기)";
+    if (btnIcon) btnIcon.className = "fa-solid fa-toggle-on text-sm";
+    if (lockNowBtn) lockNowBtn.classList.remove('hidden');
+  } else {
+    if (badge) {
+      badge.textContent = "잠금 미사용 (해제됨)";
+      badge.className = "text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-100 text-slate-500";
+    }
+    if (btn) {
+      btn.className = "px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs bg-slate-200 text-slate-700 hover:bg-slate-300 cursor-pointer";
+    }
+    if (btnText) btnText.textContent = "잠금 켜기";
+    if (btnIcon) btnIcon.className = "fa-solid fa-toggle-off text-sm";
+    if (lockNowBtn) lockNowBtn.classList.add('hidden');
+  }
+}
+
+function showLockScreen() {
+  const overlay = document.getElementById('appLockOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('hidden');
+  currentEnteredPin = '';
+  updatePinDots();
+  const errMsg = document.getElementById('pinErrorMsg');
+  if (errMsg) errMsg.textContent = '';
+}
+
+function hideLockScreen() {
+  const overlay = document.getElementById('appLockOverlay');
+  if (!overlay) return;
+  overlay.classList.add('hidden');
+  currentEnteredPin = '';
+}
+
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById(`pinDot${i}`);
+    if (dot) {
+      if (i < currentEnteredPin.length) {
+        dot.className = "w-4 h-4 rounded-full border-2 border-indigo-400 bg-indigo-500 scale-110 shadow-xs shadow-indigo-500/50 transition-all duration-150";
+      } else {
+        dot.className = "w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-800 transition-all duration-150";
+      }
+    }
+  }
+}
+
+async function pressPinDigit(digit) {
+  if (currentEnteredPin.length >= 4) return;
+  currentEnteredPin += digit;
+  updatePinDots();
+
+  if (currentEnteredPin.length === 4) {
+    const pinToVerify = currentEnteredPin;
+    try {
+      const res = await fetch('/api/pin/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinToVerify })
+      });
+      if (res.ok) {
+        sessionStorage.setItem('fintrack_unlocked', 'true');
+        hideLockScreen();
+        showToast("🔓 잠금이 해제되었습니다.");
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        const errMsg = document.getElementById('pinErrorMsg');
+        if (errMsg) errMsg.textContent = errData.message || "비밀번호가 올바르지 않습니다. (초기: 0000)";
+
+        const dotsBox = document.getElementById('pinDotsContainer');
+        if (dotsBox) {
+          dotsBox.classList.add('animate-bounce');
+          setTimeout(() => dotsBox.classList.remove('animate-bounce'), 400);
+        }
+        setTimeout(() => {
+          currentEnteredPin = '';
+          updatePinDots();
+        }, 500);
+      }
+    } catch (e) {
+      console.error(e);
+      if (pinToVerify === '0000') {
+        sessionStorage.setItem('fintrack_unlocked', 'true');
+        hideLockScreen();
+        showToast("🔓 잠금이 해제되었습니다.");
+      }
+    }
+  }
+}
+
+function backspacePinDigit() {
+  if (currentEnteredPin.length > 0) {
+    currentEnteredPin = currentEnteredPin.slice(0, -1);
+    updatePinDots();
+    const errMsg = document.getElementById('pinErrorMsg');
+    if (errMsg) errMsg.textContent = '';
+  }
+}
+
+function clearPinInput() {
+  currentEnteredPin = '';
+  updatePinDots();
+  const errMsg = document.getElementById('pinErrorMsg');
+  if (errMsg) errMsg.textContent = '';
+}
+
+// Physical keyboard listener for PIN input
+document.addEventListener('keydown', (e) => {
+  const overlay = document.getElementById('appLockOverlay');
+  if (!overlay || overlay.classList.contains('hidden')) return;
+
+  if (e.key >= '0' && e.key <= '9') {
+    pressPinDigit(e.key);
+  } else if (e.key === 'Backspace') {
+    backspacePinDigit();
+  } else if (e.key === 'Escape') {
+    clearPinInput();
+  }
+});
+
+async function togglePinLock() {
+  const newTarget = !isPinLockActive;
+  try {
+    const res = await fetch('/api/pin/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: newTarget })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      updatePinUI(data.enabled);
+      if (data.enabled) {
+        showToast("🔐 비밀번호 잠금이 활성화되었습니다. (초기번호: 0000)");
+      } else {
+        showToast("비밀번호 잠금이 해제되었습니다.");
+      }
+    } else {
+      alert("잠금 설정 변경에 실패했습니다.");
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function openChangePinModal() {
+  const modal = document.getElementById('changePinModal');
+  if (!modal) return;
+  document.getElementById('currentPinInput').value = '';
+  document.getElementById('newPinInput').value = '';
+  document.getElementById('newPinConfirmInput').value = '';
+  modal.classList.remove('hidden');
+  setTimeout(() => document.getElementById('currentPinInput').focus(), 100);
+}
+
+async function handleChangePinSubmit(e) {
+  e.preventDefault();
+  const cur = document.getElementById('currentPinInput').value.trim();
+  const n1 = document.getElementById('newPinInput').value.trim();
+  const n2 = document.getElementById('newPinConfirmInput').value.trim();
+
+  if (n1.length !== 4 || !/^\d{4}$/.test(n1)) {
+    alert("새 비밀번호는 숫자 4자리여야 합니다. (예: 1234)");
+    return;
+  }
+  if (n1 !== n2) {
+    alert("새 비밀번호 두 자리가 서로 일치하지 않습니다. 다시 확인해주세요.");
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/pin/change', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current_pin: cur,
+        new_pin: n1
+      })
+    });
+    if (res.ok) {
+      closeModal('changePinModal');
+      showToast("🔑 비밀번호가 성공적으로 변경되었습니다!");
+    } else {
+      const err = await res.json().catch(() => ({ detail: "비밀번호 변경에 실패했습니다." }));
+      alert(err.detail || "현재 비밀번호가 일치하지 않습니다. (초기 비밀번호: 0000)");
+    }
+  } catch (err) {
+    console.error(err);
+    alert("서버 통신 오류가 발생했습니다.");
+  }
+}
+
+function lockAppNow() {
+  sessionStorage.removeItem('fintrack_unlocked');
+  showLockScreen();
 }

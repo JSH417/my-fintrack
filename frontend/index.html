@@ -617,6 +617,46 @@
           </div>
         </div>
 
+        <!-- Setting: Password / PIN Lock -->
+        <div class="border-t border-slate-100 pt-6">
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-lock text-indigo-600"></i>
+              <span>가계부 비밀번호(보안 잠금) 설정</span>
+            </label>
+            <span id="pinStatusBadge" class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-100 text-slate-500">
+              잠금 미사용
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 mb-3">
+            스마트폰이나 공용 PC에서 다른 사람이 내 가계부를 보지 못하도록 4자리 비밀번호로 잠급니다. <b>(초기 비밀번호: 0000)</b>
+          </p>
+
+          <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <div class="text-xs font-bold text-slate-800">앱 접속 시 비밀번호 잠금</div>
+                <div class="text-[11px] text-slate-500 mt-0.5">켜두시면 앱을 열 때 비밀번호(초기: 0000)를 입력해야 합니다.</div>
+              </div>
+              <button type="button" id="pinToggleBtn" onclick="togglePinLock()" class="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs bg-slate-200 text-slate-700 hover:bg-slate-300 cursor-pointer">
+                <i class="fa-solid fa-toggle-off text-sm" id="pinToggleIcon"></i>
+                <span id="pinToggleBtnText">잠금 켜기</span>
+              </button>
+            </div>
+
+            <div class="pt-3 border-t border-slate-200/60 flex flex-wrap gap-2">
+              <button type="button" onclick="openChangePinModal()" class="px-3.5 py-2 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-slate-700 hover:text-indigo-600 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer">
+                <i class="fa-solid fa-key text-indigo-500"></i>
+                <span>비밀번호 변경 (기본: 0000)</span>
+              </button>
+              <button type="button" id="lockNowBtn" onclick="lockAppNow()" class="hidden px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-indigo-200 cursor-pointer">
+                <i class="fa-solid fa-shield-halved"></i>
+                <span>지금 바로 화면 잠그기</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Setting 3: Gemini API Key for AI Camera Receipt Scanner -->
         <div class="border-t border-slate-100 pt-6">
           <label class="block text-sm font-bold text-slate-900 mb-1 flex items-center justify-between">
@@ -963,6 +1003,83 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: CHANGE PIN ================= -->
+  <div id="changePinModal" class="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4 hidden backdrop-blur-xs">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-key text-indigo-600"></i>
+          <span>비밀번호 설정 및 변경</span>
+        </h3>
+        <button type="button" onclick="closeModal('changePinModal')" class="text-slate-400 hover:text-slate-600 text-xl font-bold cursor-pointer">&times;</button>
+      </div>
+      <p class="text-xs text-slate-500 leading-relaxed">
+        가계부 잠금에 사용할 4자리 숫자를 입력하세요.<br>
+        <span class="text-indigo-600 font-bold">처음 변경 시 현재 비밀번호는 0000 입니다.</span>
+      </p>
+      <form id="changePinForm" onsubmit="handleChangePinSubmit(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">현재 비밀번호 (기본: 0000)</label>
+          <input type="password" id="currentPinInput" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="0000" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-center text-lg font-mono tracking-widest font-black text-slate-900">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">새 비밀번호 (숫자 4자리)</label>
+          <input type="password" id="newPinInput" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="예: 1234" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-center text-lg font-mono tracking-widest font-black text-slate-900">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">새 비밀번호 확인</label>
+          <input type="password" id="newPinConfirmInput" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="한 번 더 입력" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-center text-lg font-mono tracking-widest font-black text-slate-900">
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button type="button" onclick="closeModal('changePinModal')" class="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold text-xs transition cursor-pointer">취소</button>
+          <button type="submit" class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-sm shadow-md shadow-indigo-100 transition cursor-pointer">비밀번호 저장</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= APP PIN LOCK SCREEN OVERLAY ================= -->
+  <div id="appLockOverlay" class="fixed inset-0 bg-slate-900/95 z-[9999] flex flex-col items-center justify-center p-4 hidden backdrop-blur-md">
+    <div class="max-w-xs w-full text-center space-y-6">
+      <div class="space-y-2">
+        <div class="w-16 h-16 rounded-3xl bg-indigo-600/30 border border-indigo-400/40 text-indigo-400 flex items-center justify-center text-3xl mx-auto shadow-lg shadow-indigo-500/20">
+          <i class="fa-solid fa-lock"></i>
+        </div>
+        <h2 class="text-xl font-black text-white tracking-tight">가계부 보안 잠금</h2>
+        <p class="text-xs text-slate-400">비밀번호 4자리를 입력해주세요<br><span class="text-indigo-400 font-medium">(초기 비밀번호: 0000)</span></p>
+      </div>
+
+      <!-- PIN Dots -->
+      <div class="flex justify-center gap-4 py-2" id="pinDotsContainer">
+        <span class="w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-800 transition-all duration-200" id="pinDot0"></span>
+        <span class="w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-800 transition-all duration-200" id="pinDot1"></span>
+        <span class="w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-800 transition-all duration-200" id="pinDot2"></span>
+        <span class="w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-800 transition-all duration-200" id="pinDot3"></span>
+      </div>
+
+      <!-- Error message -->
+      <div id="pinErrorMsg" class="text-xs font-bold text-rose-400 h-4"></div>
+
+      <!-- Numeric Keypad (Mobile friendly) -->
+      <div class="grid grid-cols-3 gap-3 max-w-[260px] mx-auto select-none">
+        <button type="button" onclick="pressPinDigit('1')" class="h-14 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-indigo-600 text-white text-xl font-bold transition flex items-center justify-center cursor-pointer">1</button>
+        <button type="button" onclick="pressPinDigit('2')" class="h-14 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-indigo-600 text-white text-xl font-bold transition flex items-center justify-center cursor-pointer">2</button>
+        <button type="button" onclick="pressPinDigit('3')" class="h-14 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-indigo-600 text-white text-xl font-bold transition flex items-center justify-center cursor-pointer">3</button>
+        <button type="button" onclick="pressPinDigit('4')" class="h-14 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-indigo-600 text-white text-xl font-bold transition flex items-center justify-center cursor-pointer">4</button>
+        <button type="button" onclick="pressPinDigit('5')" class="h-14 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-indigo-600 text-white text-xl font-bold transition flex items-center justify-center cursor-pointer">5</button>
+        <button type="button" onclick="pressPinDigit('6')" class="h-14 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-indigo-600 text-white text-xl font-bold transition flex items-center justify-center cursor-pointer">6</button>
+        <button type="button" onclick="pressPinDigit('7')" class="h-14 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-indigo-600 text-white text-xl font-bold transition flex items-center justify-center cursor-pointer">7</button>
+        <button type="button" onclick="pressPinDigit('8')" class="h-14 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-indigo-600 text-white text-xl font-bold transition flex items-center justify-center cursor-pointer">8</button>
+        <button type="button" onclick="pressPinDigit('9')" class="h-14 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-indigo-600 text-white text-xl font-bold transition flex items-center justify-center cursor-pointer">9</button>
+        <button type="button" onclick="clearPinInput()" class="h-14 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/20 text-slate-400 text-xs font-bold transition flex items-center justify-center cursor-pointer">지우기</button>
+        <button type="button" onclick="pressPinDigit('0')" class="h-14 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-indigo-600 text-white text-xl font-bold transition flex items-center justify-center cursor-pointer">0</button>
+        <button type="button" onclick="backspacePinDigit()" class="h-14 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/20 text-slate-400 text-lg font-bold transition flex items-center justify-center cursor-pointer">
+          <i class="fa-solid fa-delete-left"></i>
+        </button>
+      </div>
     </div>
   </div>
 
